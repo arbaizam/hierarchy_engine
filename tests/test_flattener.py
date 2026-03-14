@@ -45,3 +45,15 @@ def test_flattener_uses_explicit_created_and_updated_dates():
 
     assert rows[0].created_date == date(2026, 2, 1)
     assert rows[0].updated_date == date(2026, 2, 2)
+
+
+def test_flattener_defends_against_cycles_when_called_directly():
+    root = HierarchyNode(account_key="10000", account_name="Assets")
+    child = HierarchyNode(account_key="10100", account_name="Investments")
+    root.children = [child]
+    child.children = [root]
+
+    rows = HierarchyFlattener().flatten(build_definition(nodes=[root]))
+
+    assert len(rows) == 2
+    assert [row.account_key for row in rows] == ["10000", "10100"]

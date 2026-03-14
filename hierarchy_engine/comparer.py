@@ -22,7 +22,6 @@ This is enough for a very useful v1 diff and can later be extended to support:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Optional
 
 from hierarchy_engine.flattener import HierarchyFlattener
 from hierarchy_engine.models import HierarchyDefinition
@@ -47,8 +46,8 @@ class HierarchyDiffItem:
 
     change_type: str
     account_key: str
-    old_value: Optional[str] = None
-    new_value: Optional[str] = None
+    old_value: str | None = None
+    new_value: str | None = None
 
 
 @dataclass
@@ -63,8 +62,8 @@ class HierarchyDiffResult:
         self,
         change_type: str,
         account_key: str,
-        old_value: Optional[str] = None,
-        new_value: Optional[str] = None,
+        old_value: str | None = None,
+        new_value: str | None = None,
     ) -> None:
         """
         Add a diff item.

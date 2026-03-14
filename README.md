@@ -716,9 +716,9 @@ service.publish_to_tables(
 What `publish_to_tables(...)` does:
 
 1. run pre-structural validation
-2. run post-structural validation
-3. run pre-publish persistence validation
-4. flatten rows with system dates
+2. flatten rows once with system dates
+3. run post-structural validation against those exact flattened rows
+4. run pre-publish persistence validation
 5. write the registry row if the hierarchy does not already exist
 6. write the version row
 7. write the node rows
@@ -867,3 +867,135 @@ The intended lifecycle is:
 7. optionally audit the persisted result
 
 That separation of concerns is the main architectural idea of the project, and the modules are organized directly around it.
+
+
+## Testing Strategy
+
+**1. Developer workflow**
+
+Purpose: fast feedback while editing code or hierarchy configs.
+
+Run:
+- full unit suite when changing library code
+- targeted notebook validation when changing hierarchy YAMLs
+
+Typical commands:
+```powershell
+pytest tests -q -p no:cacheprovider
+pytest tests --cov=hierarchy_engine --cov-report=term-missing -p no:cacheprovider
+```
+
+Typical hierarchy-authoring workflow:
+- load YAML
+- inspect `load_issues`
+- run pre-structural validation
+- run post-structural validation
+- if publishing, run pre-publish validation against dev tables
+
+Interpretation:
+- code changes -> run `pytest`
+- YAML/content changes -> run validators on the actual hierarchy artifact
+
+**2. CI / pre-merge**
+
+Purpose: prove the software still works.
+
+Run:
+- full unit test suite
+- coverage report
+- fail on regression
+
+Recommended baseline:
+```powershell
+pytest tests --cov=hierarchy_engine --cov-report=term-missing -p no:cacheprovider
+```
+
+Good practice:
+- set a minimum coverage threshold once the suite stabilizes
+- keep CI focused on deterministic unit tests
+- do not depend on Databricks infrastructure for the default CI lane unless you create a dedicated integration lane
+
+**3. Runtime hierarchy publish flow**
+
+Purpose: prove the current hierarchy is safe to publish.
+
+Do not run `pytest` here.
+
+Run:
+- load
+- pre-structural validation
+- post-structural validation
+- pre-publish validation
+- publish
+- optional post-publish audit
+
+This is exactly what `HierarchyService.publish_to_tables(...)` is meant to enforce.
+
+Best practice:
+- the publish job should fail because the candidate hierarchy is bad or conflicts with persisted state
+- it should not run the whole software test suite every time
+
+**4. Migration / environment smoke tests**
+
+Purpose: prove the target environment is wired correctly.
+
+Run once per new environment or after major infra change:
+- import package
+- confirm Spark access
+- load demo hierarchy
+- publish to demo tables
+- run post-publish audit
+- clean up
+
+This is not the full unit suite. It is a small end-to-end environment check.
+
+Recommended smoke sequence:
+1. load `examples/demo_baseline_hierarchy.yaml`
+2. validate it
+3. publish to temporary demo tables
+4. run `validate_published_version(...)`
+5. drop demo tables
+
+**5. Optional integration test lane**
+
+If you want stronger assurance later, add a separate integration layer that uses real local Spark or Databricks-backed temporary tables.
+
+That lane should test:
+- `rows_to_dataframe(...)`
+- repository writes
+- `publish_to_tables(...)`
+- `validate_published_version(...)`
+
+But keep it separate from the fast unit suite.
+
+**6. Practical policy**
+
+Use this decision rule:
+
+- changed Python code:
+  run unit tests
+- changed YAML hierarchy:
+  run validators on that hierarchy
+- promoting to a new environment:
+  run smoke test
+- releasing or merging major changes:
+  run unit tests plus coverage
+- normal production publish:
+  run runtime validators only
+
+**7. What to avoid**
+
+Avoid:
+- running `pytest` inside the normal publish notebook/job
+- treating unit tests as a substitute for runtime validation
+- treating post-publish audit as a substitute for pre-write validation
+- coupling every runtime execution to broad dev-only tests
+
+**Recommended final model**
+
+- `pytest` validates the codebase
+- validators validate the hierarchy artifact
+- smoke tests validate the environment
+- post-publish audit validates persisted outcomes
+
+That separation is the cleanest operational model for this project.

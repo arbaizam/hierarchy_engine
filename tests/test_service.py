@@ -95,7 +95,11 @@ def test_service_publish_to_tables_runs_all_validation_layers_before_writing(mon
     )
 
     service.validate_definition.assert_called_once_with(definition)
-    service.validate_post_structural.assert_called_once_with(definition)
+    service.validate_post_structural.assert_called_once()
+    post_structural_call = service.validate_post_structural.call_args
+    assert post_structural_call.args[0] == definition
+    assert "rows" in post_structural_call.kwargs
+    assert len(post_structural_call.kwargs["rows"]) == 2
     service.validate_pre_publish.assert_called_once_with(
         definition=definition,
         spark=spark,

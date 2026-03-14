@@ -97,7 +97,7 @@ class HierarchyConfigLoader:
         value: Any,
         field_name: str,
         issues: list[ValidationIssue],
-    ):
+    ) -> date | None:
         """
         Parse an ISO date field from the YAML payload.
  
@@ -137,7 +137,7 @@ class HierarchyConfigLoader:
                 f"Field '{field_name}' must be a valid ISO date: {value}",
                 details={"field_name": field_name, "value": value},
             )
-            return value
+            return None
  
     def _parse_hierarchy(self, raw: dict[str, Any]) -> HierarchyDefinition:
         """

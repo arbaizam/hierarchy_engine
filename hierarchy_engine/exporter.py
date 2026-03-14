@@ -15,7 +15,7 @@ Export is useful for:
 
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import yaml
 
@@ -69,7 +69,7 @@ class HierarchyYamlExporter:
             }
         }
 
-    def _node_to_dict(self, node: HierarchyNode) -> Dict[str, Any]:
+    def _node_to_dict(self, node: HierarchyNode) -> dict[str, Any]:
         """
         Recursively convert a hierarchy node to a dictionary.
 
@@ -88,7 +88,7 @@ class HierarchyYamlExporter:
         Recursion mirrors the tree structure:
         each node is converted, then its children are converted in turn.
         """
-        node_dict: Dict[str, Any] = {
+        node_dict: dict[str, Any] = {
             "account_key": node.account_key,
             "account_name": node.account_name,
         }

@@ -16,11 +16,11 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from datetime import date
-from typing import Optional
 
 from hierarchy_engine.models import (
     FlattenedHierarchyRow,
     HierarchyDefinition,
+    HierarchyMetadata,
     HierarchyNode,
 )
 
@@ -52,6 +52,7 @@ class HierarchyFlattener:
         rows: list[FlattenedHierarchyRow] = []
         row_created_date = created_date or date.today()
         row_updated_date = updated_date or row_created_date
+        visited_nodes: set[int] = set()
 
         for root_node in definition.nodes:
             self._flatten_node(
@@ -63,6 +64,7 @@ class HierarchyFlattener:
                 rows=rows,
                 created_date=row_created_date,
                 updated_date=row_updated_date,
+                visited_nodes=visited_nodes,
             )
 
         return rows
@@ -70,13 +72,14 @@ class HierarchyFlattener:
     def _flatten_node(
         self,
         node: HierarchyNode,
-        metadata,
-        parent_account_key: Optional[str],
+        metadata: HierarchyMetadata,
+        parent_account_key: str | None,
         account_level: int,
         path_keys: list[str],
         rows: list[FlattenedHierarchyRow],
         created_date: date,
         updated_date: date,
+        visited_nodes: set[int],
     ) -> None:
         """
         Recursively flatten one node and all descendants.
@@ -116,6 +119,11 @@ class HierarchyFlattener:
         Termination:
             Recursion stops naturally when a node has no children.
         """
+        node_id = id(node)
+        if node_id in visited_nodes:
+            return
+        visited_nodes.add(node_id)
+
         current_path = path_keys + [node.account_key]
 
         rows.append(
@@ -133,7 +141,7 @@ class HierarchyFlattener:
         )
 
         # Recurse into children, passing the current node as the parent context.
-        for child in node.children:
+        for child in node.children or []:
             self._flatten_node(
                 node=child,
                 metadata=metadata,
@@ -143,6 +151,7 @@ class HierarchyFlattener:
                 rows=rows,
                 created_date=created_date,
                 updated_date=updated_date,
+                visited_nodes=visited_nodes,
             )
 
     def to_dicts(self, rows: list[FlattenedHierarchyRow]) -> list[dict]:

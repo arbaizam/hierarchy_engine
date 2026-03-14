@@ -205,22 +205,26 @@ class HierarchyService:
     # Post-structural validation
     # -----------------------------------------------------------------------
 
-    def get_post_structural_validation_result(self, definition) -> ValidationResult:
+    def get_post_structural_validation_result(
+        self,
+        definition,
+        rows=None,
+    ) -> ValidationResult:
         """
         Validate the flattened hierarchy artifact before persistence.
         """
-        rows = self.flatten_definition(definition)
+        rows = rows if rows is not None else self.flatten_definition(definition)
         validator = PostStructuralHierarchyValidator()
         return validator.validate_rows(
             metadata=definition.metadata,
             rows=rows,
         )
 
-    def validate_post_structural(self, definition) -> ValidationResult:
+    def validate_post_structural(self, definition, rows=None) -> ValidationResult:
         """
         Run strict flattened-row validation before persistence.
         """
-        result = self.get_post_structural_validation_result(definition)
+        result = self.get_post_structural_validation_result(definition, rows=rows)
 
         if not result.passed:
             raise HierarchyValidationError(
@@ -297,7 +301,6 @@ class HierarchyService:
         published_by: str | None = None,
         change_description: str | None = None,
     ) -> None:
- 
         """
         Publish a hierarchy definition to target Spark tables.
  
@@ -340,21 +343,19 @@ class HierarchyService:
         `validate_published_version(...)` for audit or diagnostics use cases.
         """
         self.validate_definition(definition)
-        self.validate_post_structural(definition)
+        system_date = publish_date or date.today()
+        rows = self.flattener.flatten(
+            definition=definition,
+            created_date=system_date,
+            updated_date=system_date,
+        )
+        self.validate_post_structural(definition, rows=rows)
         self.validate_pre_publish(
             definition=definition,
             spark=spark,
             registry_table=registry_table,
             version_table=version_table,
             node_table=node_table,
-        )
-
-        system_date = publish_date or date.today()
- 
-        rows = self.flattener.flatten(
-            definition=definition,
-            created_date=system_date,
-            updated_date=system_date,
         )
         row_dicts = self.flattener.to_dicts(rows)
  
@@ -373,13 +374,21 @@ class HierarchyService:
             )
  
         repo.write_version(
-            metadata = definition.metadata,
-            table_name = version_table,
-            created_date = system_date,
-            created_by = created_by,
-            published_date = system_date if definition.metadata.version_status == "published" else None,
-            published_by = published_by if definition.metadata.version_status == "published" else None,
-            change_description = change_description,
+            metadata=definition.metadata,
+            table_name=version_table,
+            created_date=system_date,
+            created_by=created_by,
+            published_date=(
+                system_date
+                if definition.metadata.version_status == "published"
+                else None
+            ),
+            published_by=(
+                published_by
+                if definition.metadata.version_status == "published"
+                else None
+            ),
+            change_description=change_description,
         )
  
         repo.write_nodes(

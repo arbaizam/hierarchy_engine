@@ -51,6 +51,8 @@ is desired.
  
 from __future__ import annotations
  
+from datetime import date
+
 from hierarchy_engine.models import (
     HierarchyDefinition,
     HierarchyNode,
@@ -168,23 +170,23 @@ class HierarchyValidator:
  
         if not meta.hierarchy_description:
             result.add_issue(
-                severity = "ERROR",
+                severity="ERROR",
                 check_name="missing_hierarchy_description",
-                message = "hierarchy_description is empty"
+                message="hierarchy_description is empty",
             )
  
         if not meta.owner_team:
             result.add_issue(
-                severity = "ERROR",
+                severity="ERROR",
                 check_name="missing_owner_team",
-                message = "owner_team is empty"
+                message="owner_team is empty",
             )
  
         if not meta.business_domain:
             result.add_issue(
-                severity = "ERROR",
+                severity="ERROR",
                 check_name="missing_business_domain",
-                message = "business_domain is empty"
+                message="business_domain is empty",
             )
  
         if meta.version_status not in self.VALID_VERSION_STATUS:
@@ -203,8 +205,8 @@ class HierarchyValidator:
             )
  
         if (
-            meta.effective_start_date is not None
-            and meta.effective_end_date is not None
+            isinstance(meta.effective_start_date, date)
+            and isinstance(meta.effective_end_date, date)
             and meta.effective_end_date < meta.effective_start_date
         ):
             result.add_issue(
@@ -446,8 +448,9 @@ class HierarchyValidator:
                     },
                 )
                 return
- 
-            for child in node.children:
+
+            children = node.children or []
+            for child in children:
                 if not isinstance(child, HierarchyNode):
                     result.add_issue(
                         severity="ERROR",

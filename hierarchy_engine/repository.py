@@ -36,7 +36,6 @@ from pyspark.sql.types import (
 class HierarchyRepository:
     """
     Repository for writing hierarchy objects to Spark tables.
-     Added to capture bypass of validation.
     """
  
     def __init__(self, spark: SparkSession):
@@ -66,10 +65,14 @@ class HierarchyRepository:
         row_count = self.spark.sql(f"""
             SELECT COUNT(*) AS row_count
             FROM {table_name}
-            WHERE hierarchy_id = '{hierarchy_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(hierarchy_id)}
         """).first()["row_count"]
 
         return row_count > 0
+
+    def _sql_string_literal(self, value: str) -> str:
+        escaped_value = value.replace("'", "''")
+        return f"'{escaped_value}'"
  
     # ---------------------------------------------------------------------
     # Explicit schemas

@@ -60,6 +60,10 @@ class PostPublishHierarchyValidator:
             Active Spark session.
         """
         self.spark = spark
+
+    def _sql_string_literal(self, value: str) -> str:
+        escaped_value = value.replace("'", "''")
+        return f"'{escaped_value}'"
  
     def validate_version(
         self,
@@ -159,8 +163,8 @@ class PostPublishHierarchyValidator:
                 account_key,
                 COUNT(*) AS row_count
             FROM {node_table}
-            WHERE hierarchy_id = '{hierarchy_id}'
-              AND version_id = '{version_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(hierarchy_id)}
+              AND version_id = {self._sql_string_literal(version_id)}
             GROUP BY account_key
             HAVING COUNT(*) > 1
         """)
@@ -229,8 +233,8 @@ class PostPublishHierarchyValidator:
               ON child.hierarchy_id = parent.hierarchy_id
              AND child.version_id = parent.version_id
              AND child.parent_account_key = parent.account_key
-            WHERE child.hierarchy_id = '{hierarchy_id}'
-              AND child.version_id = '{version_id}'
+            WHERE child.hierarchy_id = {self._sql_string_literal(hierarchy_id)}
+              AND child.version_id = {self._sql_string_literal(version_id)}
               AND child.parent_account_key IS NOT NULL
               AND parent.account_key IS NULL
         """)
@@ -288,7 +292,7 @@ class PostPublishHierarchyValidator:
             SELECT
                 COUNT(*) AS current_count
             FROM {version_table}
-            WHERE hierarchy_id = '{hierarchy_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(hierarchy_id)}
               AND is_current = TRUE
         """)
  
@@ -351,9 +355,9 @@ class PostPublishHierarchyValidator:
                 b.effective_end_date AS end_2
             FROM {version_table} a
             JOIN {version_table} b
-              ON a.hierarchy_id = b.hierarchy_id
+             ON a.hierarchy_id = b.hierarchy_id
              AND a.version_id < b.version_id
-             AND a.hierarchy_id = '{hierarchy_id}'
+             AND a.hierarchy_id = {self._sql_string_literal(hierarchy_id)}
              AND a.effective_start_date <= COALESCE(b.effective_end_date, DATE '9999-12-31')
              AND b.effective_start_date <= COALESCE(a.effective_end_date, DATE '9999-12-31')
         """)

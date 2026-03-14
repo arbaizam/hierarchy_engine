@@ -15,8 +15,6 @@ the output preserves the authored tree structure.
 
 from __future__ import annotations
 
-from typing import List
-
 from hierarchy_engine.models import HierarchyDefinition, HierarchyNode
 
 
@@ -41,7 +39,7 @@ class HierarchyTreeRenderer:
         str
             Indented tree representation of the hierarchy.
         """
-        lines: List[str] = []
+        lines: list[str] = []
 
         header = (
             f"Hierarchy: {definition.metadata.hierarchy_id} | "
@@ -63,7 +61,7 @@ class HierarchyTreeRenderer:
     def _render_node(
         self,
         node: HierarchyNode,
-        lines: List[str],
+        lines: list[str],
         level: int,
         show_keys: bool,
     ) -> None:

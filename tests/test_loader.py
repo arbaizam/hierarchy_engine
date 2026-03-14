@@ -61,11 +61,16 @@ def test_loader_collects_field_level_issues_without_raising():
     validation_result = HierarchyValidator().validate(definition)
 
     assert definition.metadata.hierarchy_id == ""
+    assert definition.metadata.effective_start_date is None
     assert definition.nodes == []
     assert "invalid_effective_start_date_format" in load_issue_names
     assert "invalid_nodes_collection" in load_issue_names
     assert any(
         issue.check_name == "missing_hierarchy_id"
+        for issue in validation_result.issues
+    )
+    assert any(
+        issue.check_name == "missing_effective_start_date"
         for issue in validation_result.issues
     )
 

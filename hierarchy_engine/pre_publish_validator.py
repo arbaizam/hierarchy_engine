@@ -22,6 +22,8 @@ records that would otherwise need cleanup.
 
 from __future__ import annotations
 
+from datetime import date
+
 from pyspark.sql import SparkSession
 
 from hierarchy_engine.models import HierarchyMetadata, ValidationResult
@@ -73,6 +75,10 @@ class PrePublishHierarchyValidator:
     def _table_exists(self, table_name: str) -> bool:
         return bool(self.spark.catalog.tableExists(table_name))
 
+    def _sql_string_literal(self, value: str) -> str:
+        escaped_value = value.replace("'", "''")
+        return f"'{escaped_value}'"
+
     def _validate_registry_integrity(
         self,
         metadata: HierarchyMetadata,
@@ -90,7 +96,7 @@ class PrePublishHierarchyValidator:
                 owner_team,
                 business_domain
             FROM {registry_table}
-            WHERE hierarchy_id = '{metadata.hierarchy_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(metadata.hierarchy_id)}
         """).collect()
 
         if len(registry_rows) > 1:
@@ -171,8 +177,8 @@ class PrePublishHierarchyValidator:
         existing_count = self.spark.sql(f"""
             SELECT COUNT(*) AS row_count
             FROM {version_table}
-            WHERE hierarchy_id = '{metadata.hierarchy_id}'
-              AND version_id = '{metadata.version_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(metadata.hierarchy_id)}
+              AND version_id = {self._sql_string_literal(metadata.version_id)}
         """).first()["row_count"]
 
         if existing_count > 1:
@@ -217,8 +223,8 @@ class PrePublishHierarchyValidator:
         existing_count = self.spark.sql(f"""
             SELECT COUNT(*) AS row_count
             FROM {node_table}
-            WHERE hierarchy_id = '{metadata.hierarchy_id}'
-              AND version_id = '{metadata.version_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(metadata.hierarchy_id)}
+              AND version_id = {self._sql_string_literal(metadata.version_id)}
         """).first()["row_count"]
 
         duplicate_rows = self.spark.sql(f"""
@@ -226,8 +232,8 @@ class PrePublishHierarchyValidator:
                 account_key,
                 COUNT(*) AS row_count
             FROM {node_table}
-            WHERE hierarchy_id = '{metadata.hierarchy_id}'
-              AND version_id = '{metadata.version_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(metadata.hierarchy_id)}
+              AND version_id = {self._sql_string_literal(metadata.version_id)}
             GROUP BY account_key
             HAVING COUNT(*) > 1
         """).collect()
@@ -295,7 +301,7 @@ class PrePublishHierarchyValidator:
         current_count = self.spark.sql(f"""
             SELECT COUNT(*) AS current_count
             FROM {version_table}
-            WHERE hierarchy_id = '{metadata.hierarchy_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(metadata.hierarchy_id)}
               AND is_current = TRUE
         """).first()["current_count"]
 
@@ -319,7 +325,7 @@ class PrePublishHierarchyValidator:
         version_table: str,
         result: ValidationResult,
     ) -> None:
-        if metadata.effective_start_date is None:
+        if not isinstance(metadata.effective_start_date, date):
             return
 
         overlap_rows = self.spark.sql(f"""
@@ -328,7 +334,7 @@ class PrePublishHierarchyValidator:
                 effective_start_date,
                 effective_end_date
             FROM {version_table}
-            WHERE hierarchy_id = '{metadata.hierarchy_id}'
+            WHERE hierarchy_id = {self._sql_string_literal(metadata.hierarchy_id)}
               AND effective_start_date <= COALESCE(
                     {self._sql_date_literal(metadata.effective_end_date)},
                     DATE '9999-12-31'
@@ -350,10 +356,14 @@ class PrePublishHierarchyValidator:
                     "hierarchy_id": metadata.hierarchy_id,
                     "candidate_version_id": metadata.version_id,
                     "existing_version_id": row["version_id"],
-                    "candidate_effective_start_date": metadata.effective_start_date.isoformat(),
+                    "candidate_effective_start_date": (
+                        metadata.effective_start_date.isoformat()
+                        if isinstance(metadata.effective_start_date, date)
+                        else None
+                    ),
                     "candidate_effective_end_date": (
                         metadata.effective_end_date.isoformat()
-                        if metadata.effective_end_date is not None
+                        if isinstance(metadata.effective_end_date, date)
                         else None
                     ),
                     "existing_effective_start_date": (
@@ -370,6 +380,6 @@ class PrePublishHierarchyValidator:
             )
 
     def _sql_date_literal(self, value) -> str:
-        if value is None:
+        if value is None or not isinstance(value, date):
             return "NULL"
         return f"DATE '{value.isoformat()}'"

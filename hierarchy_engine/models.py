@@ -17,17 +17,15 @@ This module defines:
 - nested tree objects for authoring/loading
 - flattened row objects for persistence
 - validation result objects for structured error reporting
-
-- ws regey: \u00A0|\u2007|\u202F|\uFEFF
 """
  
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Optional
-from datetime import datetime
- 
+from typing import Any
+
+
 @dataclass
 class HierarchyMetadata:
     """
@@ -65,9 +63,10 @@ class HierarchyMetadata:
     version_id: str = ""
     version_name: str = ""
     version_status: str = "draft"
-    effective_start_date: date | str | None = None
-    effective_end_date: date | str | None = None
- 
+    effective_start_date: date | None = None
+    effective_end_date: date | None = None
+
+
 @dataclass
 class HierarchyNode:
     """
@@ -91,7 +90,8 @@ class HierarchyNode:
     account_key: str
     account_name: str
     children: list["HierarchyNode"] = field(default_factory=list)
- 
+
+
 @dataclass
 class HierarchyDefinition:
     """
@@ -107,8 +107,9 @@ class HierarchyDefinition:
  
     metadata: HierarchyMetadata
     nodes: list[HierarchyNode] = field(default_factory=list)
-    load_issues: list["ValidationIssue"] = field(default_factory = list)
- 
+    load_issues: list["ValidationIssue"] = field(default_factory=list)
+
+
 @dataclass
 class FlattenedHierarchyRow:
     """
@@ -140,16 +141,18 @@ class FlattenedHierarchyRow:
     version_id: str
     account_key: str
     account_name: str
-    parent_account_key: Optional[str]
+    parent_account_key: str | None
     account_level: int
     node_path: str
     created_date: date
     updated_date: date
- 
+
+
 # ---------------------------------------------------------------------------
 # Validation result models
 # ---------------------------------------------------------------------------
- 
+
+
 @dataclass
 class ValidationIssue:
     """
@@ -171,8 +174,9 @@ class ValidationIssue:
     severity: str
     check_name: str
     message: str
-    details: Optional[dict[str, Any]] = None
- 
+    details: dict[str, Any] | None = None
+
+
 @dataclass
 class ValidationResult:
     """
@@ -202,7 +206,7 @@ class ValidationResult:
         severity: str,
         check_name: str,
         message: str,
-        details: Optional[dict[str, Any]] = None,
+        details: dict[str, Any] | None = None,
     ) -> None:
         """
         Add a validation issue to the result.
