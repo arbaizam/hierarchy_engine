@@ -83,13 +83,13 @@ hierarchy_engine/
 
 ## Python Module Guide
 
-This section explains the responsibility of every `.py` module under [`hierarchy_engine/`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine).
+This section explains the responsibility of every `.py` module under `hierarchy_engine/`.
 
-### [`__init__.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/__init__.py)
+### `hierarchy_engine/__init__.py`
 
 Package-level description. This module establishes the package as a standalone hierarchy management library. It does not contain operational logic.
 
-### [`models.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/models.py)
+### `hierarchy_engine/models.py`
 
 Defines the core dataclasses used across the project:
 
@@ -102,7 +102,7 @@ Defines the core dataclasses used across the project:
 
 This module is the shared vocabulary of the project. Every other module either produces, consumes, or transforms these objects.
 
-### [`errors.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/errors.py)
+### `hierarchy_engine/errors.py`
 
 Defines custom exception types:
 
@@ -113,7 +113,7 @@ Defines custom exception types:
 
 These exceptions separate parse failures, validation failures, and publish failures from generic Python exceptions.
 
-### [`loader.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/loader.py)
+### `hierarchy_engine/loader.py`
 
 Loads YAML files into `HierarchyDefinition`.
 
@@ -130,7 +130,7 @@ Important distinction:
 - it performs tolerant parsing and shape checks
 - formal hierarchy validation happens later
 
-### [`pre_structural_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/pre_structural_validator.py)
+### `hierarchy_engine/pre_structural_validator.py`
 
 Validates the nested in-memory hierarchy definition before flattening.
 
@@ -142,7 +142,7 @@ This is the first blocking validation stage. It answers:
 
 This validator works against `HierarchyDefinition` and `HierarchyNode`, not Spark tables and not flattened rows.
 
-### [`flattener.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/flattener.py)
+### `hierarchy_engine/flattener.py`
 
 Recursively converts the nested hierarchy tree into adjacency-list rows.
 
@@ -156,7 +156,7 @@ Responsibilities:
 
 This module is fundamental because the flattened output is the publish artifact persisted to Spark.
 
-### [`post_structural_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/post_structural_validator.py)
+### `hierarchy_engine/post_structural_validator.py`
 
 Validates the flattened row artifact after flattening and before any Spark write.
 
@@ -168,7 +168,7 @@ This is the second blocking validation stage. It answers:
 
 This validator works against `FlattenedHierarchyRow[]`.
 
-### [`pre_publish_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/pre_publish_validator.py)
+### `hierarchy_engine/pre_publish_validator.py`
 
 Validates the candidate publish against persisted Spark tables before any write occurs.
 
@@ -182,7 +182,7 @@ This is the third blocking validation stage. It answers:
 
 This validator compares the candidate hierarchy against existing Spark tables.
 
-### [`post_publish_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/post_publish_validator.py)
+### `hierarchy_engine/post_publish_validator.py`
 
 Validates already-persisted Spark data after publish.
 
@@ -196,7 +196,7 @@ This module is intentionally optional and read-only. It is best used for:
 
 It is not the primary publish safeguard. The project should normally prevent bad writes before publish.
 
-### [`repository.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/repository.py)
+### `hierarchy_engine/repository.py`
 
 Contains Spark persistence helpers and explicit schemas.
 
@@ -211,7 +211,7 @@ Responsibilities:
 
 This module is intentionally narrow. It is not supposed to contain workflow orchestration or business validation.
 
-### [`service.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/service.py)
+### `hierarchy_engine/service.py`
 
 The main public orchestration layer and the primary entry point for notebooks and scripts.
 
@@ -229,7 +229,7 @@ Responsibilities:
 
 If you are using the library from Databricks notebooks, this is usually the class you should instantiate first.
 
-### [`view_builder.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/view_builder.py)
+### `hierarchy_engine/view_builder.py`
 
 Builds derived reporting views from the published base hierarchy tables.
 
@@ -243,7 +243,7 @@ Responsibilities:
 This module is intentionally post-publish. It does not participate in the
 blocking validation chain for base-table publishing.
 
-### [`renderer.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/renderer.py)
+### `hierarchy_engine/renderer.py`
 
 Renders a hierarchy as a human-readable indented text tree.
 
@@ -254,7 +254,7 @@ Useful for:
 - walkthroughs with business users
 - pull request context
 
-### [`comparer.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/comparer.py)
+### `hierarchy_engine/comparer.py`
 
 Compares two hierarchy definitions and returns a structured diff.
 
@@ -267,7 +267,7 @@ Current supported change types:
 
 This module is useful for change review between hierarchy versions.
 
-### [`exporter.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/exporter.py)
+### `hierarchy_engine/exporter.py`
 
 Exports an in-memory hierarchy definition back to YAML.
 
@@ -413,7 +413,7 @@ The project uses four validation concepts, but only the first three are normal p
 
 ### 1. Load Issues
 
-Source: [`loader.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/loader.py)
+Source: `hierarchy_engine/loader.py`
 
 Purpose:
 
@@ -428,7 +428,7 @@ Examples:
 
 ### 2. Pre-Structural Validation
 
-Source: [`pre_structural_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/pre_structural_validator.py)
+Source: `hierarchy_engine/pre_structural_validator.py`
 
 Purpose:
 
@@ -456,7 +456,7 @@ Checks currently include:
 
 ### 3. Post-Structural Validation
 
-Source: [`post_structural_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/post_structural_validator.py)
+Source: `hierarchy_engine/post_structural_validator.py`
 
 Purpose:
 
@@ -486,7 +486,7 @@ Checks currently include:
 
 ### 4. Pre-Publish Persistence Validation
 
-Source: [`pre_publish_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/pre_publish_validator.py)
+Source: `hierarchy_engine/pre_publish_validator.py`
 
 Purpose:
 
@@ -508,7 +508,7 @@ Checks currently include:
 
 ### 5. Post-Publish Validation
 
-Source: [`post_publish_validator.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/post_publish_validator.py)
+Source: `hierarchy_engine/post_publish_validator.py`
 
 Purpose:
 
@@ -551,7 +551,7 @@ Recommended use:
 
 ### 1. Create the Conda Environment
 
-This repository already includes an [`environment.yml`](/c:/Users/aarba/pydev/hierarchy_engine/environment.yml).
+This repository already includes `environment.yml`.
 
 To create or refresh the environment:
 
@@ -661,7 +661,7 @@ hierarchy:
 
 Use this when the hierarchy does not yet exist in the registry table.
 
-1. Create a new YAML file in [`hierarchy_configs/`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_configs).
+1. Create a new YAML file in `hierarchy_configs/`.
 2. Set a new `hierarchy_id`.
 3. Fill all required metadata fields.
 4. Start with `version_status: "draft"`.
@@ -984,7 +984,7 @@ service.rebuild_reporting_views(
 
 ## Testing
 
-The repository includes unit tests under [`tests/`](/c:/Users/aarba/pydev/hierarchy_engine/tests).
+The repository includes unit tests under `tests/`.
 
 Current suite coverage includes:
 
