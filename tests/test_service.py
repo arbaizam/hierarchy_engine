@@ -71,6 +71,28 @@ def test_service_to_dataframe_uses_repository(monkeypatch):
     repo_instance.rows_to_dataframe.assert_called_once()
 
 
+def test_service_create_base_tables_delegates_to_repository(monkeypatch):
+    repo_instance = Mock()
+    repo_class = Mock(return_value=repo_instance)
+    monkeypatch.setattr("hierarchy_engine.service.HierarchyRepository", repo_class)
+
+    HierarchyService().create_base_tables(
+        spark="spark",
+        registry_table="registry",
+        version_table="versions",
+        node_table="nodes",
+        mode="overwrite",
+    )
+
+    repo_class.assert_called_once_with("spark")
+    repo_instance.create_base_tables.assert_called_once_with(
+        registry_table="registry",
+        version_table="versions",
+        node_table="nodes",
+        mode="overwrite",
+    )
+
+
 def test_service_publish_to_tables_runs_all_validation_layers_before_writing(monkeypatch):
     repo_instance = Mock()
     repo_instance.rows_to_dataframe.return_value = "rows_df"
@@ -222,6 +244,80 @@ def test_service_validate_published_version_delegates_to_post_publish_validator(
         version_id="V1",
         node_table="nodes",
         version_table="versions",
+    )
+
+
+def test_service_rebuild_reporting_views_delegates_to_view_builder(monkeypatch):
+    builder = Mock()
+    builder.rebuild_all.return_value = {"reporting_view": "dim_reporting_hierarchy"}
+    builder_class = Mock(return_value=builder)
+    monkeypatch.setattr("hierarchy_engine.service.HierarchyViewBuilder", builder_class)
+
+    result = HierarchyService().rebuild_reporting_views(
+        spark="spark",
+        registry_table="registry",
+        version_table="versions",
+        node_table="nodes",
+        paths_view="v_paths",
+        flat_view="v_flat",
+        dims_view="v_dims",
+        reporting_view="dim_reporting_hierarchy",
+    )
+
+    assert result == {"reporting_view": "dim_reporting_hierarchy"}
+    builder_class.assert_called_once_with("spark")
+    builder.rebuild_all.assert_called_once_with(
+        registry_table="registry",
+        version_table="versions",
+        node_table="nodes",
+        paths_view="v_paths",
+        flat_view="v_flat",
+        dims_view="v_dims",
+        reporting_view="dim_reporting_hierarchy",
+    )
+
+
+def test_service_publish_and_rebuild_reporting_views_runs_publish_then_rebuild():
+    service = HierarchyService()
+    service.publish_to_tables = Mock()
+    service.rebuild_reporting_views = Mock(return_value={"reporting_view": "dim"})
+    definition = build_definition()
+
+    result = service.publish_and_rebuild_reporting_views(
+        definition=definition,
+        spark="spark",
+        registry_table="registry",
+        version_table="versions",
+        node_table="nodes",
+        paths_view="v_paths",
+        flat_view="v_flat",
+        dims_view="v_dims",
+        reporting_view="dim",
+        created_by="engineer",
+    )
+
+    assert result == {"reporting_view": "dim"}
+    service.publish_to_tables.assert_called_once_with(
+        definition=definition,
+        spark="spark",
+        registry_table="registry",
+        version_table="versions",
+        node_table="nodes",
+        node_write_mode="append",
+        publish_date=None,
+        created_by="engineer",
+        published_by=None,
+        change_description=None,
+    )
+    service.rebuild_reporting_views.assert_called_once_with(
+        spark="spark",
+        registry_table="registry",
+        version_table="versions",
+        node_table="nodes",
+        paths_view="v_paths",
+        flat_view="v_flat",
+        dims_view="v_dims",
+        reporting_view="dim",
     )
 
 

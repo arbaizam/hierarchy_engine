@@ -21,8 +21,6 @@ hierarchy:
           children:
             - account_key: "12100"
               account_name: "Short-Term Investments"
-            - account_key: "12200"
-              account_name: "Long-Term Investments"
             - account_key: "12300"
               account_name: "Derivatives Portfolio"
 

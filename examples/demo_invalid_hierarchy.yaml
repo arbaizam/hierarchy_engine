@@ -7,16 +7,14 @@ hierarchy:
   version_id: "2026Q1"
   version_name: "Broken Draft"
   version_status: "validated"
-  effective_start_date: "2026-01-01"
+  effective_start_date: "2026-13-01"
   effective_end_date: "2025-12-31"
 
   nodes:
     - account_key: "10000"
       account_name: "Assets"
-      children:
-        - account_key: "11000"
-          account_name: "Cash"
-        - account_key: "11000"
-          account_name: "Duplicate Cash"
+      children: {}
+    - account_key: "10000"
+      account_name: "Duplicate Assets"
     - account_key: ""
       account_name: ""

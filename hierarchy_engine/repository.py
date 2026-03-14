@@ -21,6 +21,7 @@ are written with stable types every time.
 from __future__ import annotations
  
 from datetime import date
+import logging
 from typing import Optional
 
 from pyspark.sql import SparkSession
@@ -32,7 +33,11 @@ from pyspark.sql.types import (
     StructField,
     StructType,
 )
- 
+
+
+logger = logging.getLogger(__name__)
+
+
 class HierarchyRepository:
     """
     Repository for writing hierarchy objects to Spark tables.
@@ -175,6 +180,49 @@ class HierarchyRepository:
         problems across repeated development writes.
         """
         return self.spark.createDataFrame(rows, schema=self.node_schema)
+
+    def create_base_tables(
+        self,
+        registry_table: str,
+        version_table: str,
+        node_table: str,
+        mode: str = "errorifexists",
+    ) -> None:
+        """
+        Create the empty base hierarchy tables from the explicit schemas.
+
+        Parameters
+        ----------
+        registry_table : str
+            Target registry table name.
+        version_table : str
+            Target version table name.
+        node_table : str
+            Target base node table name.
+        mode : str, default "errorifexists"
+            Spark write mode used when creating the empty tables.
+
+        Notes
+        -----
+        This method is intended for environment/bootstrap setup. It creates
+        empty persisted tables that match the schemas used by the publish path.
+        """
+        logger.info(
+            "Creating empty base tables: registry=%s version=%s node=%s mode=%s",
+            registry_table,
+            version_table,
+            node_table,
+            mode,
+        )
+        self.spark.createDataFrame([], schema=self.registry_schema).write.mode(
+            mode
+        ).saveAsTable(registry_table)
+        self.spark.createDataFrame([], schema=self.version_schema).write.mode(
+            mode
+        ).saveAsTable(version_table)
+        self.spark.createDataFrame([], schema=self.node_schema).write.mode(
+            mode
+        ).saveAsTable(node_table)
  
     # ---------------------------------------------------------------------
     # Registry writes
@@ -206,6 +254,11 @@ class HierarchyRepository:
         `created_date` and `updated_date` are system metadata and should not be
         inferred from authored hierarchy business dates.
         """
+        logger.info(
+            "Writing registry row to %s for hierarchy_id=%s",
+            table_name,
+            metadata.hierarchy_id,
+        )
         data = [
             {
                 "hierarchy_id": metadata.hierarchy_id,
@@ -262,6 +315,12 @@ class HierarchyRepository:
         Created/published fields are operational metadata and should be supplied
         by the publish workflow rather than inferred from business dates.
         """
+        logger.info(
+            "Writing version row to %s for hierarchy_id=%s version_id=%s",
+            table_name,
+            metadata.hierarchy_id,
+            metadata.version_id,
+        )
         data = [
             {
                 "hierarchy_id": metadata.hierarchy_id,
@@ -299,4 +358,5 @@ class HierarchyRepository:
         mode : str, default "append"
             Spark write mode.
         """
+        logger.info("Writing node rows to %s with mode=%s", table_name, mode)
         rows_df.write.mode(mode).saveAsTable(table_name)

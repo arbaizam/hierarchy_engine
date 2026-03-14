@@ -1,0 +1,13 @@
+# Requirements for hierarchy_engine.
+#
+# - `pytest` and `pytest-cov` are only needed if you want to run the test suite
+#   from Databricks.
+
+pyyaml>=6.0
+pandas>=2.2
+
+# Optional: test dependencies
+pytest>=8.0
+pytest-cov>=5.0
+
+

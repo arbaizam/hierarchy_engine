@@ -89,6 +89,27 @@ def test_rows_to_dataframe_passes_rows_to_spark():
     assert result.schema[0].name == "hierarchy_id"
 
 
+def test_create_base_tables_creates_empty_tables_from_explicit_schemas():
+    spark = FakeSpark()
+
+    HierarchyRepository(spark).create_base_tables(
+        registry_table="registry_table",
+        version_table="version_table",
+        node_table="node_table",
+        mode="overwrite",
+    )
+
+    assert len(spark.created_frames) == 3
+    assert spark.created_frames[0].data == []
+    assert spark.created_frames[0].write.mode_value == "overwrite"
+    assert spark.created_frames[0].write.table_name == "registry_table"
+    assert spark.created_frames[1].write.table_name == "version_table"
+    assert spark.created_frames[2].write.table_name == "node_table"
+    assert spark.created_frames[0].schema[0].name == "hierarchy_id"
+    assert spark.created_frames[1].schema[1].name == "version_id"
+    assert spark.created_frames[2].schema[2].name == "account_key"
+
+
 def test_write_registry_creates_append_table_payload():
     spark = FakeSpark()
 

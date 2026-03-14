@@ -222,11 +222,26 @@ Responsibilities:
 - flatten hierarchies
 - convert to Spark DataFrames
 - publish to tables
+- rebuild derived reporting views
 - render trees
 - compare versions
 - export to YAML
 
 If you are using the library from Databricks notebooks, this is usually the class you should instantiate first.
+
+### [`view_builder.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/view_builder.py)
+
+Builds derived reporting views from the published base hierarchy tables.
+
+Responsibilities:
+
+- rebuild recursive path views
+- rebuild flattened reporting views
+- rebuild leaf-level reporting dimension views
+- rebuild the final all-published reporting view
+
+This module is intentionally post-publish. It does not participate in the
+blocking validation chain for base-table publishing.
 
 ### [`renderer.py`](/c:/Users/aarba/pydev/hierarchy_engine/hierarchy_engine/renderer.py)
 
@@ -326,6 +341,10 @@ The flattened node rows include:
 ## Spark Tables
 
 The project is designed around three core Spark tables.
+
+If you need to create the empty base tables before the first publish, use
+`HierarchyService.create_base_tables(...)` or `HierarchyRepository.create_base_tables(...)`
+rather than hand-writing ad hoc schemas.
 
 ### Registry Table
 
@@ -519,12 +538,14 @@ Recommended use:
 6. Run pre-publish persistence validation against the target tables.
 7. Publish only if all blocking validation stages pass.
 8. Optionally run post-publish validation as an audit.
+9. Rebuild reporting views from the published base tables.
 
 ### Operational Interpretation
 
 - During authoring: use pre-structural and post-structural validation repeatedly.
 - During publish: always run pre-publish persistence validation immediately before write.
 - After publish: optionally run post-publish audit checks if you want defense-in-depth or monitoring.
+- After publish: rebuild reporting views as a derived-artifact step.
 
 ## First-Time Setup
 
@@ -689,6 +710,100 @@ new_definition = service.load_from_yaml("hierarchy_configs/NEW.yaml")
 print(service.render_diff(old_definition, new_definition))
 ```
 
+## Procedure: Revise an Existing Hierarchy
+
+Use this when a hierarchy already exists and you want to release a revised
+version through the normal managed workflow.
+
+Recommended sequence:
+
+1. Start from the current published version.
+2. Copy the YAML or export a baseline definition.
+3. Keep the same `hierarchy_id`.
+4. Set a new `version_id`, `version_name`, and effective dates.
+5. Keep the revised hierarchy as `draft` while editing.
+6. Make the structural changes in YAML.
+7. Review `load_issues`.
+8. Run pre-structural validation.
+9. Run post-structural validation.
+10. Compare the revised version to the current published version.
+11. Run pre-publish validation against the target tables.
+12. Change the revised version to `published` only when it is ready to release.
+13. Publish to the base tables.
+14. Rebuild the reporting views.
+15. Run post-publish audit validation.
+
+Typical Databricks pattern:
+
+```python
+import logging
+
+from hierarchy_engine.service import HierarchyService
+
+logging.basicConfig(level=logging.INFO)
+
+service = HierarchyService()
+
+current_definition = service.load_from_yaml("/Workspace/Repos/.../hierarchy_configs/CURRENT.yaml")
+revised_definition = service.load_from_yaml("/Workspace/Repos/.../hierarchy_configs/REVISED.yaml")
+
+print(revised_definition.load_issues)
+print(service.get_validation_result(revised_definition).to_text())
+print(service.get_post_structural_validation_result(revised_definition).to_text())
+print(service.render_diff(current_definition, revised_definition))
+
+pre_publish = service.get_pre_publish_validation_result(
+    definition=revised_definition,
+    spark=spark,
+    registry_table="catalog.schema.hierarchy_registry",
+    version_table="catalog.schema.hierarchy_version",
+    node_table="catalog.schema.base_hierarchy_node",
+)
+print(pre_publish.to_text())
+
+revised_definition.metadata.version_status = "published"
+
+service.publish_to_tables(
+    definition=revised_definition,
+    spark=spark,
+    registry_table="catalog.schema.hierarchy_registry",
+    version_table="catalog.schema.hierarchy_version",
+    node_table="catalog.schema.base_hierarchy_node",
+    node_write_mode="append",
+    created_by="your.user",
+    published_by="your.user",
+    change_description="Revised hierarchy release",
+)
+
+service.rebuild_reporting_views(
+    spark=spark,
+    registry_table="catalog.schema.hierarchy_registry",
+    version_table="catalog.schema.hierarchy_version",
+    node_table="catalog.schema.base_hierarchy_node",
+    paths_view="catalog.schema.v_hierarchy_paths",
+    flat_view="catalog.schema.v_hierarchy_flat",
+    dims_view="catalog.schema.v_hierarchy_dims",
+    reporting_view="catalog.schema.dim_reporting_hierarchy",
+)
+
+audit = service.validate_published_version(
+    spark=spark,
+    hierarchy_id=revised_definition.metadata.hierarchy_id,
+    version_id=revised_definition.metadata.version_id,
+    node_table="catalog.schema.base_hierarchy_node",
+    version_table="catalog.schema.hierarchy_version",
+)
+print(audit.to_text())
+```
+
+Recommended operating rules:
+
+- do not edit a published version in place
+- do not reuse an existing `version_id`
+- keep revisions in `draft` until release-ready
+- use the comparer before publishing any meaningful structural change
+- rebuild reporting views immediately after publish
+
 ## Procedure: Publish a Hierarchy
 
 This is the standard publish path.
@@ -723,6 +838,29 @@ What `publish_to_tables(...)` does:
 6. write the version row
 7. write the node rows
 
+## Procedure: Create Empty Base Tables
+
+Use this when you need to bootstrap the target Spark tables before any
+hierarchy has been published.
+
+```python
+from hierarchy_engine.service import HierarchyService
+
+service = HierarchyService()
+
+service.create_base_tables(
+    spark=spark,
+    registry_table="catalog.schema.hierarchy_registry",
+    version_table="catalog.schema.hierarchy_version",
+    node_table="catalog.schema.base_hierarchy_node",
+    mode="ignore",
+)
+```
+
+Use `mode="ignore"` for normal Databricks bootstrap behavior so existing tables
+are left alone. Use `mode="overwrite"` only when you intentionally want to
+replace existing tables during setup or development.
+
 ## Procedure: Run Post-Publish Audit Validation
 
 Use this when you want to inspect persisted state after publish.
@@ -748,6 +886,53 @@ service.validate_published_version_strict(
     version_id="2026Q1",
     node_table="catalog.schema.base_hierarchy_node",
     version_table="catalog.schema.hierarchy_version",
+)
+```
+
+## Procedure: Rebuild Reporting Views
+
+Use this after base-table publishing when downstream reporting views need to be
+refreshed for all published hierarchy versions.
+
+```python
+views = service.rebuild_reporting_views(
+    spark=spark,
+    registry_table="catalog.schema.hierarchy_registry",
+    version_table="catalog.schema.hierarchy_version",
+    node_table="catalog.schema.base_hierarchy_node",
+    paths_view="catalog.schema.v_hierarchy_paths",
+    flat_view="catalog.schema.v_hierarchy_flat",
+    dims_view="catalog.schema.v_hierarchy_dims",
+    reporting_view="catalog.schema.dim_reporting_hierarchy",
+)
+
+print(views)
+```
+
+The rebuilt views are:
+
+- `v_hierarchy_paths`
+- `v_hierarchy_flat`
+- `v_hierarchy_dims`
+- `dim_reporting_hierarchy`
+
+The final reporting view contains all published versions, not only the current
+version.
+
+If you want one notebook step for both base publish and reporting refresh:
+
+```python
+service.publish_and_rebuild_reporting_views(
+    definition=definition,
+    spark=spark,
+    registry_table="catalog.schema.hierarchy_registry",
+    version_table="catalog.schema.hierarchy_version",
+    node_table="catalog.schema.base_hierarchy_node",
+    paths_view="catalog.schema.v_hierarchy_paths",
+    flat_view="catalog.schema.v_hierarchy_flat",
+    dims_view="catalog.schema.v_hierarchy_dims",
+    reporting_view="catalog.schema.dim_reporting_hierarchy",
+    node_write_mode="append",
 )
 ```
 
@@ -784,6 +969,17 @@ service.publish_to_tables(
     node_table="catalog.schema.base_hierarchy_node",
     node_write_mode="append",
 )
+
+service.rebuild_reporting_views(
+    spark=spark,
+    registry_table="catalog.schema.hierarchy_registry",
+    version_table="catalog.schema.hierarchy_version",
+    node_table="catalog.schema.base_hierarchy_node",
+    paths_view="catalog.schema.v_hierarchy_paths",
+    flat_view="catalog.schema.v_hierarchy_flat",
+    dims_view="catalog.schema.v_hierarchy_dims",
+    reporting_view="catalog.schema.dim_reporting_hierarchy",
+)
 ```
 
 ## Testing
@@ -799,6 +995,7 @@ Current suite coverage includes:
 - pre-publish persistence validation
 - repository behavior
 - service orchestration
+- reporting view builder behavior
 - comparer, exporter, and renderer utilities
 
 Run tests with:

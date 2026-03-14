@@ -17,8 +17,10 @@ It coordinates:
  
 from __future__ import annotations
  
-from pathlib import Path
 from datetime import date
+import logging
+from pathlib import Path
+
 from hierarchy_engine.comparer import HierarchyComparer, HierarchyDiffResult
 from hierarchy_engine.errors import HierarchyValidationError
 from hierarchy_engine.exporter import HierarchyYamlExporter
@@ -31,7 +33,12 @@ from hierarchy_engine.post_structural_validator import PostStructuralHierarchyVa
 from hierarchy_engine.pre_structural_validator import HierarchyValidator
 from hierarchy_engine.renderer import HierarchyTreeRenderer
 from hierarchy_engine.repository import HierarchyRepository
- 
+from hierarchy_engine.view_builder import HierarchyViewBuilder
+
+
+logger = logging.getLogger(__name__)
+
+
 class HierarchyService:
     """
     Main service class for hierarchy workflows.
@@ -89,6 +96,7 @@ class HierarchyService:
         HierarchyDefinition
             Parsed hierarchy definition.
         """
+        logger.info("Loading hierarchy definition from YAML: %s", path)
         return self.loader.load_from_yaml(path)
  
     # -----------------------------------------------------------------------
@@ -109,6 +117,11 @@ class HierarchyService:
         ValidationResult
             Structured validation result.
         """
+        logger.info(
+            "Running pre-structural validation for hierarchy_id=%s version_id=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+        )
         return self.validator.validate(definition)
  
     def validate_definition(self, definition) -> ValidationResult:
@@ -158,6 +171,11 @@ class HierarchyService:
         list[FlattenedHierarchyRow]
             Flattened rows.
         """
+        logger.info(
+            "Flattening hierarchy definition for hierarchy_id=%s version_id=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+        )
         return self.flattener.flatten(definition)
  
     def flatten_to_dicts(self, definition) -> list[dict]:
@@ -180,7 +198,33 @@ class HierarchyService:
     # -----------------------------------------------------------------------
     # Spark / DataFrame helpers
     # -----------------------------------------------------------------------
- 
+
+    def create_base_tables(
+        self,
+        spark,
+        registry_table: str,
+        version_table: str,
+        node_table: str,
+        mode: str = "errorifexists",
+    ) -> None:
+        """
+        Create the empty base Spark tables required by the publish workflow.
+        """
+        logger.info(
+            "Creating base hierarchy tables: registry=%s version=%s node=%s mode=%s",
+            registry_table,
+            version_table,
+            node_table,
+            mode,
+        )
+        repo = HierarchyRepository(spark)
+        repo.create_base_tables(
+            registry_table=registry_table,
+            version_table=version_table,
+            node_table=node_table,
+            mode=mode,
+        )
+
     def to_dataframe(self, definition, spark):
         """
         Convert a hierarchy definition directly to a Spark DataFrame.
@@ -197,6 +241,11 @@ class HierarchyService:
         pyspark.sql.DataFrame
             Flattened hierarchy DataFrame.
         """
+        logger.info(
+            "Converting flattened hierarchy to DataFrame for hierarchy_id=%s version_id=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+        )
         rows = self.flatten_to_dicts(definition)
         repo = HierarchyRepository(spark)
         return repo.rows_to_dataframe(rows)
@@ -213,6 +262,11 @@ class HierarchyService:
         """
         Validate the flattened hierarchy artifact before persistence.
         """
+        logger.info(
+            "Running post-structural validation for hierarchy_id=%s version_id=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+        )
         rows = rows if rows is not None else self.flatten_definition(definition)
         validator = PostStructuralHierarchyValidator()
         return validator.validate_rows(
@@ -249,6 +303,14 @@ class HierarchyService:
         """
         Validate a candidate publish against persisted tables before writing.
         """
+        logger.info(
+            "Running pre-publish validation for hierarchy_id=%s version_id=%s against registry=%s version=%s node=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+            registry_table,
+            version_table,
+            node_table,
+        )
         validator = PrePublishHierarchyValidator(spark)
         return validator.validate_publish(
             metadata=definition.metadata,
@@ -342,6 +404,14 @@ class HierarchyService:
         Optional post-publish validation remains available separately through
         `validate_published_version(...)` for audit or diagnostics use cases.
         """
+        logger.info(
+            "Publishing hierarchy_id=%s version_id=%s to registry=%s version=%s node=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+            registry_table,
+            version_table,
+            node_table,
+        )
         self.validate_definition(definition)
         system_date = publish_date or date.today()
         rows = self.flattener.flatten(
@@ -366,13 +436,30 @@ class HierarchyService:
             table_name=registry_table,
             hierarchy_id=definition.metadata.hierarchy_id,
         ):
+            logger.info(
+                "Writing new registry entry for hierarchy_id=%s to %s",
+                definition.metadata.hierarchy_id,
+                registry_table,
+            )
             repo.write_registry(
                 metadata=definition.metadata,
                 table_name=registry_table,
                 created_date=system_date,
                 updated_date=system_date,
             )
+        else:
+            logger.info(
+                "Registry entry already exists for hierarchy_id=%s in %s; skipping registry write",
+                definition.metadata.hierarchy_id,
+                registry_table,
+            )
  
+        logger.info(
+            "Writing version row for hierarchy_id=%s version_id=%s to %s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+            version_table,
+        )
         repo.write_version(
             metadata=definition.metadata,
             table_name=version_table,
@@ -391,12 +478,111 @@ class HierarchyService:
             change_description=change_description,
         )
  
+        logger.info(
+            "Writing node rows for hierarchy_id=%s version_id=%s to %s with mode=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+            node_table,
+            node_write_mode,
+        )
         repo.write_nodes(
             rows_df=rows_df,
             table_name=node_table,
             mode=node_write_mode,
         )
  
+    # -----------------------------------------------------------------------
+    # Reporting view rebuilds
+    # -----------------------------------------------------------------------
+
+    def rebuild_reporting_views(
+        self,
+        spark,
+        registry_table: str,
+        version_table: str,
+        node_table: str,
+        paths_view: str,
+        flat_view: str,
+        dims_view: str,
+        reporting_view: str,
+    ) -> dict[str, str]:
+        """
+        Rebuild all derived reporting views from the published base tables.
+
+        Notes
+        -----
+        This method is intended to run after base-table publishing. It rebuilds
+        reporting views for all published versions, not only the current one.
+        """
+        logger.info(
+            "Rebuilding reporting views from registry=%s version=%s node=%s into paths=%s flat=%s dims=%s reporting=%s",
+            registry_table,
+            version_table,
+            node_table,
+            paths_view,
+            flat_view,
+            dims_view,
+            reporting_view,
+        )
+        builder = HierarchyViewBuilder(spark)
+        return builder.rebuild_all(
+            registry_table=registry_table,
+            version_table=version_table,
+            node_table=node_table,
+            paths_view=paths_view,
+            flat_view=flat_view,
+            dims_view=dims_view,
+            reporting_view=reporting_view,
+        )
+
+    def publish_and_rebuild_reporting_views(
+        self,
+        definition,
+        spark,
+        registry_table: str,
+        version_table: str,
+        node_table: str,
+        paths_view: str,
+        flat_view: str,
+        dims_view: str,
+        reporting_view: str,
+        node_write_mode: str = "append",
+        publish_date: date | None = None,
+        created_by: str | None = None,
+        published_by: str | None = None,
+        change_description: str | None = None,
+    ) -> dict[str, str]:
+        """
+        Publish base tables, then rebuild all derived reporting views.
+        """
+        logger.info(
+            "Publishing and rebuilding reporting views for hierarchy_id=%s version_id=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version_id,
+        )
+        self.publish_to_tables(
+            definition=definition,
+            spark=spark,
+            registry_table=registry_table,
+            version_table=version_table,
+            node_table=node_table,
+            node_write_mode=node_write_mode,
+            publish_date=publish_date,
+            created_by=created_by,
+            published_by=published_by,
+            change_description=change_description,
+        )
+        return self.rebuild_reporting_views(
+            spark=spark,
+            registry_table=registry_table,
+            version_table=version_table,
+            node_table=node_table,
+            paths_view=paths_view,
+            flat_view=flat_view,
+            dims_view=dims_view,
+            reporting_view=reporting_view,
+        )
+
     # -----------------------------------------------------------------------
     # Post-publish Spark validation
     # -----------------------------------------------------------------------
@@ -441,6 +627,13 @@ class HierarchyService:
         Use this method when you need to inspect already-persisted data for
         drift, manual edits, partial writes, or legacy cleanup.
         """
+        logger.info(
+            "Running post-publish audit validation for hierarchy_id=%s version_id=%s against node=%s version=%s",
+            hierarchy_id,
+            version_id,
+            node_table,
+            version_table,
+        )
         validator = PostPublishHierarchyValidator(spark)
         return validator.validate_version(
             hierarchy_id=hierarchy_id,
