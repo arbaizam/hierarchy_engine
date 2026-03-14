@@ -1,0 +1,57 @@
+hierarchy:
+  hierarchy_id: "MVE_DOE"
+  hierarchy_name: "Duration of Equity - Example"
+  hierarchy_description: "Example DOE reporting hierarchy"
+  owner_team: "ALM Systems Engineering"
+  business_domain: "ALM" 
+  version_id: "v1.0"  
+  version_name: "2026 Q1 Initial versin"  
+  version_status: "draft"   
+  effective_start_date: "2026-01-01"
+  effective_end_date: null
+
+  nodes:
+    - account_key: "10000"
+      account_name: "Assets"
+      children:
+        - account_key: "10100"
+          account_name: "Investments"
+          children:
+            - account_key: "10110"
+              account_name: "Asset Swaps"
+            - account_key: "10120"
+              account_name: "Debentures - Fix."
+            - account_key: "10130"
+              account_name: "Debentures - Var."
+            - account_key: "10150"
+              account_name: "ST Investments"
+
+        - account_key: "10200"
+          account_name: "Advances"
+          children:
+            - account_key: "10210"
+              account_name: "Fix. Rate Adv."
+            - account_key: "10220"
+              account_name: "Var. Rate Adv."
+
+    - account_key: "20000"
+      account_name: "Liabilities"
+      children:
+        - account_key: "20100"
+          account_name: "Debt"
+          children:
+            - account_key: "20110"
+              account_name: "Liab. Swaps"
+            - account_key: "20120"
+              account_name: "LSwap Bonds"
+
+    - account_key: "30000"
+      account_name: "Equity"
+      children:
+        - account_key: "30100"
+          account_name: "Retained Earnings"
+          children:
+            - account_key: "30110"
+              account_name: "Restricted RE"
+            - account_key: "30120"
+              account_name: "Unrestricted RE"
