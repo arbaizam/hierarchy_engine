@@ -50,7 +50,7 @@ class HierarchyMetadata:
     version_name : str
         Human-readable version name.
     version_status : str
-        Lifecycle status such as 'draft', 'validated', or 'published'.
+        Lifecycle status such as 'draft', 'published', or 'retired'.
     effective_start_date : date | None
         Effective start date of the hierarchy version.
     effective_end_date : date | None

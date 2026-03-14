@@ -1,0 +1,22 @@
+hierarchy:
+  hierarchy_id: "ENG_DEMO_BAD"
+  hierarchy_name: "Broken Demo Hierarchy"
+  hierarchy_description: ""
+  owner_team: ""
+  business_domain: ""
+  version_id: "2026Q1"
+  version_name: "Broken Draft"
+  version_status: "validated"
+  effective_start_date: "2026-01-01"
+  effective_end_date: "2025-12-31"
+
+  nodes:
+    - account_key: "10000"
+      account_name: "Assets"
+      children:
+        - account_key: "11000"
+          account_name: "Cash"
+        - account_key: "11000"
+          account_name: "Duplicate Cash"
+    - account_key: ""
+      account_name: ""

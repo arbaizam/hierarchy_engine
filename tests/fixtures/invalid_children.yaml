@@ -1,0 +1,14 @@
+hierarchy:
+  hierarchy_id: "TEST"
+  hierarchy_name: "Test"
+  hierarchy_description: "Description"
+  owner_team: "Finance"
+  business_domain: "ALM"
+  version_id: "V1"
+  version_name: "Version 1"
+  version_status: "draft"
+  effective_start_date: "2026-01-01"
+  nodes:
+    - account_key: "10000"
+      account_name: "Assets"
+      children: {}

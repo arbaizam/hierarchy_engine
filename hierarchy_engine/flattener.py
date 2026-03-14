@@ -30,7 +30,12 @@ class HierarchyFlattener:
     Flatten a nested hierarchy into adjacency-list rows.
     """
 
-    def flatten(self, definition: HierarchyDefinition) -> list[FlattenedHierarchyRow]:
+    def flatten(
+        self,
+        definition: HierarchyDefinition,
+        created_date: date | None = None,
+        updated_date: date | None = None,
+    ) -> list[FlattenedHierarchyRow]:
         """
         Flatten a full hierarchy definition into row objects.
 
@@ -45,7 +50,8 @@ class HierarchyFlattener:
             Flattened adjacency-list rows.
         """
         rows: list[FlattenedHierarchyRow] = []
-        today = date.today().isoformat()
+        row_created_date = created_date or date.today()
+        row_updated_date = updated_date or row_created_date
 
         for root_node in definition.nodes:
             self._flatten_node(
@@ -55,8 +61,8 @@ class HierarchyFlattener:
                 account_level=1,
                 path_keys=[],
                 rows=rows,
-                created_date=today,
-                updated_date=today,
+                created_date=row_created_date,
+                updated_date=row_updated_date,
             )
 
         return rows
@@ -69,8 +75,8 @@ class HierarchyFlattener:
         account_level: int,
         path_keys: list[str],
         rows: list[FlattenedHierarchyRow],
-        created_date: str,
-        updated_date: str,
+        created_date: date,
+        updated_date: date,
     ) -> None:
         """
         Recursively flatten one node and all descendants.
@@ -89,9 +95,9 @@ class HierarchyFlattener:
             Path of ancestor keys from the root down to the parent.
         rows : list[FlattenedHierarchyRow]
             Mutable output accumulator.
-        created_date : str
+        created_date : date
             Creation date used for emitted rows.
-        updated_date : str
+        updated_date : date
             Update date used for emitted rows.
 
         Notes

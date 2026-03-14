@@ -92,7 +92,12 @@ class HierarchyConfigLoader:
             return ""
         return str(value)
  
-    def _parse_date(self, value: Any, field_name: str):
+    def _parse_date(
+        self,
+        value: Any,
+        field_name: str,
+        issues: list[ValidationIssue],
+    ):
         """
         Parse an ISO date field from the YAML payload.
  

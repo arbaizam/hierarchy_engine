@@ -1,0 +1,41 @@
+hierarchy:
+  hierarchy_id: "ENG_DEMO"
+  hierarchy_name: "Engineering Demo Hierarchy"
+  hierarchy_description: "Baseline demo hierarchy used for notebook walkthroughs."
+  owner_team: "Data Engineering"
+  business_domain: "Platform"
+  version_id: "2026Q1"
+  version_name: "2026 Q1 Baseline"
+  version_status: "draft"
+  effective_start_date: "2026-01-01"
+  effective_end_date: null
+
+  nodes:
+    - account_key: "10000"
+      account_name: "Assets"
+      children:
+        - account_key: "11000"
+          account_name: "Cash"
+        - account_key: "12000"
+          account_name: "Investments"
+          children:
+            - account_key: "12100"
+              account_name: "Short-Term Investments"
+            - account_key: "12200"
+              account_name: "Long-Term Investments"
+
+    - account_key: "20000"
+      account_name: "Liabilities"
+      children:
+        - account_key: "21000"
+          account_name: "Deposits"
+        - account_key: "22000"
+          account_name: "Debt"
+
+    - account_key: "30000"
+      account_name: "Equity"
+      children:
+        - account_key: "31000"
+          account_name: "Retained Earnings"
+        - account_key: "32000"
+          account_name: "Capital Stock"

@@ -1,4 +1,3 @@
-
 """
 Hierarchy validation logic.
  
@@ -6,15 +5,23 @@ This module validates hierarchy definitions before they are flattened or publish
  
 Validation philosophy
 ---------------------
-Validation is split into two conceptual layers:
+Validation is split into three blocking layers:
  
 1. In-memory structural validation
    Performed directly on the loaded HierarchyDefinition object before anything
    is written to persistence.
  
-2. Post-publish data-quality validation
-   Can be performed later against Spark tables or DataFrames after publishing.
-   That logic does not belong here.
+2. Post-structural validation
+   Performed after flattening and before persistence. This layer validates the
+   adjacency-list publish artifact itself.
+
+3. Pre-write persistence validation
+   Performed by the service layer against persisted tables before any write is
+   attempted. That layer catches publish-time conflicts that are not visible in
+   the in-memory or flattened object models.
+
+Optional audit validation can still be performed later against persisted Spark
+tables after publish, but that is not this validator's responsibility.
  
 This validator focuses on the first layer only.
  
@@ -52,15 +59,15 @@ from hierarchy_engine.models import (
  
 class HierarchyValidator:
     """
-    Validate hierarchy definitions prior to publishing.
+    Validate hierarchy definitions prior to flattening and publishing.
  
     Notes
     -----
     This validator is intentionally responsible only for object-level validation.
-    It does not depend on Spark, SQL views, or persisted tables.
+    It does not depend on Spark, SQL views, flattened rows, or persisted tables.
     """
  
-    VALID_VERSION_STATUS = {"draft", "validated", "published", "retired"}
+    VALID_VERSION_STATUS = {"draft", "published", "retired"}
  
     def validate(self, definition: HierarchyDefinition) -> ValidationResult:
         """

@@ -25,10 +25,12 @@ from hierarchy_engine.exporter import HierarchyYamlExporter
 from hierarchy_engine.flattener import HierarchyFlattener
 from hierarchy_engine.loader import HierarchyConfigLoader
 from hierarchy_engine.models import ValidationResult
+from hierarchy_engine.pre_publish_validator import PrePublishHierarchyValidator
 from hierarchy_engine.post_publish_validator import PostPublishHierarchyValidator
+from hierarchy_engine.post_structural_validator import PostStructuralHierarchyValidator
+from hierarchy_engine.pre_structural_validator import HierarchyValidator
 from hierarchy_engine.renderer import HierarchyTreeRenderer
 from hierarchy_engine.repository import HierarchyRepository
-from hierarchy_engine.validator import HierarchyValidator
  
 class HierarchyService:
     """
@@ -200,6 +202,85 @@ class HierarchyService:
         return repo.rows_to_dataframe(rows)
  
     # -----------------------------------------------------------------------
+    # Post-structural validation
+    # -----------------------------------------------------------------------
+
+    def get_post_structural_validation_result(self, definition) -> ValidationResult:
+        """
+        Validate the flattened hierarchy artifact before persistence.
+        """
+        rows = self.flatten_definition(definition)
+        validator = PostStructuralHierarchyValidator()
+        return validator.validate_rows(
+            metadata=definition.metadata,
+            rows=rows,
+        )
+
+    def validate_post_structural(self, definition) -> ValidationResult:
+        """
+        Run strict flattened-row validation before persistence.
+        """
+        result = self.get_post_structural_validation_result(definition)
+
+        if not result.passed:
+            raise HierarchyValidationError(
+                "Post-structural hierarchy validation failed.\n"
+                + result.to_text()
+            )
+
+        return result
+
+    # -----------------------------------------------------------------------
+    # Pre-write persistence validation
+    # -----------------------------------------------------------------------
+
+    def get_pre_publish_validation_result(
+        self,
+        definition,
+        spark,
+        registry_table: str,
+        version_table: str,
+        node_table: str,
+    ) -> ValidationResult:
+        """
+        Validate a candidate publish against persisted tables before writing.
+        """
+        validator = PrePublishHierarchyValidator(spark)
+        return validator.validate_publish(
+            metadata=definition.metadata,
+            registry_table=registry_table,
+            node_table=node_table,
+            version_table=version_table,
+        )
+
+    def validate_pre_publish(
+        self,
+        definition,
+        spark,
+        registry_table: str,
+        version_table: str,
+        node_table: str,
+    ) -> ValidationResult:
+        """
+        Run strict pre-write validation against persisted tables.
+        """
+        result = self.get_pre_publish_validation_result(
+            definition=definition,
+            spark=spark,
+            registry_table=registry_table,
+            version_table=version_table,
+            node_table=node_table,
+        )
+
+        if not result.passed:
+            raise HierarchyValidationError(
+                "Pre-write hierarchy validation failed.\n"
+                + result.to_text()
+            )
+
+        return result
+
+    # -----------------------------------------------------------------------
     # Publish
     # -----------------------------------------------------------------------
  
@@ -250,12 +331,24 @@ class HierarchyService:
  
         Notes
         -----
-        This method performs strict in-memory validation before publishing.
-        Post-publish validation is available separately through
-        `validate_published_version(...)`.
+        This method performs three blocking validation passes before publishing:
+        1. strict in-memory structural validation
+        2. strict post-structural validation of flattened rows
+        3. strict pre-write persistence validation
+
+        Optional post-publish validation remains available separately through
+        `validate_published_version(...)` for audit or diagnostics use cases.
         """
         self.validate_definition(definition)
- 
+        self.validate_post_structural(definition)
+        self.validate_pre_publish(
+            definition=definition,
+            spark=spark,
+            registry_table=registry_table,
+            version_table=version_table,
+            node_table=node_table,
+        )
+
         system_date = publish_date or date.today()
  
         rows = self.flattener.flatten(
@@ -268,12 +361,16 @@ class HierarchyService:
         repo = HierarchyRepository(spark)
         rows_df = repo.rows_to_dataframe(row_dicts)
  
-        repo.write_registry(
-            metadata=definition.metadata,
+        if not repo.registry_entry_exists(
             table_name=registry_table,
-            created_date=system_date,
-            updated_date=system_date,
-        )
+            hierarchy_id=definition.metadata.hierarchy_id,
+        ):
+            repo.write_registry(
+                metadata=definition.metadata,
+                table_name=registry_table,
+                created_date=system_date,
+                updated_date=system_date,
+            )
  
         repo.write_version(
             metadata = definition.metadata,
@@ -326,12 +423,14 @@ class HierarchyService:
  
         Notes
         -----
-        This is the second validation layer in the hierarchy project.
- 
-        Recommended use:
-        1. run `validate_definition(...)` before publish
-        2. publish to tables
-        3. run `validate_published_version(...)` after publish
+        This validation is read-only and intended for audit/diagnostics.
+
+        Normal publish protection should come from:
+        1. `validate_definition(...)`
+        2. `validate_pre_publish(...)`
+
+        Use this method when you need to inspect already-persisted data for
+        drift, manual edits, partial writes, or legacy cleanup.
         """
         validator = PostPublishHierarchyValidator(spark)
         return validator.validate_version(

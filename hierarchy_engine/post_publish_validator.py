@@ -10,17 +10,20 @@ Why this module exists
 The in-memory validator checks the authored hierarchy definition before publish.
 That catches structural issues in the YAML-derived object model.
  
-However, once the hierarchy has been persisted, additional data-quality checks
-become useful, such as:
+The normal publish path should also perform a pre-write persistence validation
+pass before any table writes occur.
+
+This module remains useful after persistence when you need audit or diagnostic
+checks such as:
  
 - duplicate persisted node rows
 - missing parent rows in the persisted node table
 - multiple current versions in the version table
 - overlapping effective date windows across versions
  
-These checks are best implemented against persisted tables and DataFrames,
-but they should remain ephemeral and code-driven rather than being expressed
-as permanent SQL validation views.
+These checks are best implemented against persisted tables and DataFrames.
+They are read-only and intended for already-persisted data rather than for
+blocking the normal publish flow.
  
 Design notes
 ------------

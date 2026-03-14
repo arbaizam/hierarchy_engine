@@ -21,13 +21,9 @@ are written with stable types every time.
 from __future__ import annotations
  
 from datetime import date
-from typing import TYPE_CHECKING, Any, Optional
- 
-if TYPE_CHECKING:
-    from pyspark.sql import DataFrame, SparkSession
- 
-from hierarchy_engine.errors import HiearchyValidationError
- 
+from typing import Optional
+
+from pyspark.sql import SparkSession
 from pyspark.sql.types import (
     BooleanType,
     DateType,
@@ -43,7 +39,7 @@ class HierarchyRepository:
      Added to capture bypass of validation.
     """
  
-    def __init__(self, spark: "SparkSession" | Any):
+    def __init__(self, spark: SparkSession):
         """
         Initialize the repository.
  
@@ -53,6 +49,27 @@ class HierarchyRepository:
             Active Spark session.
         """
         self.spark = spark
+
+    def table_exists(self, table_name: str) -> bool:
+        """
+        Return whether a Spark table exists.
+        """
+        return bool(self.spark.catalog.tableExists(table_name))
+
+    def registry_entry_exists(self, table_name: str, hierarchy_id: str) -> bool:
+        """
+        Return whether the registry already contains the hierarchy_id.
+        """
+        if not self.table_exists(table_name):
+            return False
+
+        row_count = self.spark.sql(f"""
+            SELECT COUNT(*) AS row_count
+            FROM {table_name}
+            WHERE hierarchy_id = '{hierarchy_id}'
+        """).first()["row_count"]
+
+        return row_count > 0
  
     # ---------------------------------------------------------------------
     # Explicit schemas
