@@ -72,7 +72,8 @@ hierarchy_engine/
 │  ├─ pre_structural_validator.py
 │  ├─ renderer.py
 │  ├─ repository.py
-│  └─ service.py
+│  ├─ service.py
+│  └─ view_builder.py
 ├─ hierarchy_configs/
 │  ├─ CAP_MKTS.yaml
 │  └─ MVE_DOE.yaml
@@ -238,7 +239,9 @@ Responsibilities:
 - rebuild recursive path views
 - rebuild flattened reporting views
 - rebuild leaf-level reporting dimension views
-- rebuild the final all-published reporting view
+- rebuild all-node reporting dimension views
+- rebuild the final all-published leaf reporting view
+- rebuild the final all-published all-node reporting view
 
 This module is intentionally post-publish. It does not participate in the
 blocking validation chain for base-table publishing.
@@ -784,6 +787,8 @@ service.rebuild_reporting_views(
     flat_view="catalog.schema.v_hierarchy_flat",
     dims_view="catalog.schema.v_hierarchy_dims",
     reporting_view="catalog.schema.dim_reporting_hierarchy",
+    nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
+    nodes_reporting_view="catalog.schema.dim_reporting_hierarchy_nodes",
 )
 
 audit = service.validate_published_version(
@@ -904,6 +909,8 @@ views = service.rebuild_reporting_views(
     flat_view="catalog.schema.v_hierarchy_flat",
     dims_view="catalog.schema.v_hierarchy_dims",
     reporting_view="catalog.schema.dim_reporting_hierarchy",
+    nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
+    nodes_reporting_view="catalog.schema.dim_reporting_hierarchy_nodes",
 )
 
 print(views)
@@ -915,9 +922,18 @@ The rebuilt views are:
 - `v_hierarchy_flat`
 - `v_hierarchy_dims`
 - `dim_reporting_hierarchy`
+- `v_hierarchy_nodes_dims`
+- `dim_reporting_hierarchy_nodes`
 
-The final reporting view contains all published versions, not only the current
-version.
+The intended roles are:
+
+- `v_hierarchy_dims`: leaf-level dimension surface
+- `dim_reporting_hierarchy`: published leaf-level reporting view
+- `v_hierarchy_nodes_dims`: all-node dimension surface
+- `dim_reporting_hierarchy_nodes`: published all-node reporting view
+
+The published reporting outputs contain all published versions, not only the
+current version.
 
 If you want one notebook step for both base publish and reporting refresh:
 
@@ -932,6 +948,8 @@ service.publish_and_rebuild_reporting_views(
     flat_view="catalog.schema.v_hierarchy_flat",
     dims_view="catalog.schema.v_hierarchy_dims",
     reporting_view="catalog.schema.dim_reporting_hierarchy",
+    nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
+    nodes_reporting_view="catalog.schema.dim_reporting_hierarchy_nodes",
     node_write_mode="append",
 )
 ```
@@ -979,6 +997,8 @@ service.rebuild_reporting_views(
     flat_view="catalog.schema.v_hierarchy_flat",
     dims_view="catalog.schema.v_hierarchy_dims",
     reporting_view="catalog.schema.dim_reporting_hierarchy",
+    nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
+    nodes_reporting_view="catalog.schema.dim_reporting_hierarchy_nodes",
 )
 ```
 

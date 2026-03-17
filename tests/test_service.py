@@ -262,6 +262,8 @@ def test_service_rebuild_reporting_views_delegates_to_view_builder(monkeypatch):
         flat_view="v_flat",
         dims_view="v_dims",
         reporting_view="dim_reporting_hierarchy",
+        nodes_dims_view="v_nodes_dims",
+        nodes_reporting_view="dim_reporting_hierarchy_nodes",
     )
 
     assert result == {"reporting_view": "dim_reporting_hierarchy"}
@@ -274,6 +276,8 @@ def test_service_rebuild_reporting_views_delegates_to_view_builder(monkeypatch):
         flat_view="v_flat",
         dims_view="v_dims",
         reporting_view="dim_reporting_hierarchy",
+        nodes_dims_view="v_nodes_dims",
+        nodes_reporting_view="dim_reporting_hierarchy_nodes",
     )
 
 
@@ -293,6 +297,8 @@ def test_service_publish_and_rebuild_reporting_views_runs_publish_then_rebuild()
         flat_view="v_flat",
         dims_view="v_dims",
         reporting_view="dim",
+        nodes_dims_view="v_nodes_dims",
+        nodes_reporting_view="dim_nodes",
         created_by="engineer",
     )
 
@@ -318,6 +324,8 @@ def test_service_publish_and_rebuild_reporting_views_runs_publish_then_rebuild()
         flat_view="v_flat",
         dims_view="v_dims",
         reporting_view="dim",
+        nodes_dims_view="v_nodes_dims",
+        nodes_reporting_view="dim_nodes",
     )
 
 

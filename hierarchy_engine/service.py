@@ -505,6 +505,8 @@ class HierarchyService:
         flat_view: str,
         dims_view: str,
         reporting_view: str,
+        nodes_dims_view: str,
+        nodes_reporting_view: str,
     ) -> dict[str, str]:
         """
         Rebuild all derived reporting views from the published base tables.
@@ -515,7 +517,7 @@ class HierarchyService:
         reporting views for all published versions, not only the current one.
         """
         logger.info(
-            "Rebuilding reporting views from registry=%s version=%s node=%s into paths=%s flat=%s dims=%s reporting=%s",
+            "Rebuilding reporting views from registry=%s version=%s node=%s into paths=%s flat=%s dims=%s reporting=%s nodes_dims=%s nodes_reporting=%s",
             registry_table,
             version_table,
             node_table,
@@ -523,6 +525,8 @@ class HierarchyService:
             flat_view,
             dims_view,
             reporting_view,
+            nodes_dims_view,
+            nodes_reporting_view,
         )
         builder = HierarchyViewBuilder(spark)
         return builder.rebuild_all(
@@ -533,6 +537,8 @@ class HierarchyService:
             flat_view=flat_view,
             dims_view=dims_view,
             reporting_view=reporting_view,
+            nodes_dims_view=nodes_dims_view,
+            nodes_reporting_view=nodes_reporting_view,
         )
 
     def publish_and_rebuild_reporting_views(
@@ -546,6 +552,8 @@ class HierarchyService:
         flat_view: str,
         dims_view: str,
         reporting_view: str,
+        nodes_dims_view: str,
+        nodes_reporting_view: str,
         node_write_mode: str = "append",
         publish_date: date | None = None,
         created_by: str | None = None,
@@ -581,6 +589,8 @@ class HierarchyService:
             flat_view=flat_view,
             dims_view=dims_view,
             reporting_view=reporting_view,
+            nodes_dims_view=nodes_dims_view,
+            nodes_reporting_view=nodes_reporting_view,
         )
 
     # -----------------------------------------------------------------------
