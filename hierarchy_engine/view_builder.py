@@ -41,9 +41,10 @@ class HierarchyViewBuilder:
     Spark object names supplied by the caller.
     """
 
-    def __init__(self, spark: SparkSession):
+    def __init__(self, spark: SparkSession, target_max_depth: int = 10):
         """Initialize the builder."""
         self.spark = spark
+        self.target_max_depth = target_max_depth
 
     def rebuild_paths_view(
         self,
@@ -121,7 +122,7 @@ class HierarchyViewBuilder:
         downstream consumers can choose leaf-only or all-node projections.
         """
         logger.info("Rebuilding hierarchy flat view: %s", flat_view)
-        max_depth = self._get_max_depth(paths_view)
+        max_depth = self.target_max_depth #self._get_max_depth(paths_view)
 
         select_cols = [
             "p.hierarchy_id",
@@ -183,7 +184,7 @@ class HierarchyViewBuilder:
         This view is intended for fact-to-leaf mapping scenarios.
         """
         logger.info("Rebuilding hierarchy leaf dims view: %s", dims_view)
-        max_depth = self._get_max_depth(flat_view)
+        max_depth = self.target_max_depth  #self._get_max_depth(flat_view)
 
         select_cols = [
             "f.hierarchy_id",
@@ -192,6 +193,7 @@ class HierarchyViewBuilder:
             "r.owner_team",
             "r.business_domain",
             "f.version_id",
+            "concat(f.hierarchy_id, '||', f.version_id) AS hier_ver_key",
             "v.version_name",
             "v.version_status",
             "v.effective_start_date",
@@ -205,6 +207,10 @@ class HierarchyViewBuilder:
             "f.depth",
             "f.root_account_key",
             "f.root_account_name",
+            "f.path_keys", #3-21-26
+            "f.path_names", #3-21-26
+            "array_join(f.path_keys, '|') AS path_key_path",  #3-21-26
+            "array_join(f.path_names, '|') AS path_name_path", #3-21-26
         ]
 
         for idx in range(max_depth):
@@ -244,7 +250,7 @@ class HierarchyViewBuilder:
         tree navigation, UI rendering, or downstream presentation logic.
         """
         logger.info("Rebuilding hierarchy nodes dims view: %s", nodes_dims_view)
-        max_depth = self._get_max_depth(flat_view)
+        max_depth = self.target_max_depth #self._get_max_depth(flat_view)
 
         select_cols = [
             "f.hierarchy_id",
@@ -253,6 +259,7 @@ class HierarchyViewBuilder:
             "r.owner_team",
             "r.business_domain",
             "f.version_id",
+            "concat(f.hierarchy_id, '||', f.version_id) AS hier_ver_key",
             "v.version_name",
             "v.version_status",
             "v.effective_start_date",
@@ -268,6 +275,10 @@ class HierarchyViewBuilder:
             "f.root_account_key",
             "f.root_account_name",
             "f.derived_is_leaf",
+            "f.path_keys", #3-21-26
+            "f.path_names", #3-21-26
+            "array_join(f.path_keys, '|') AS path_key_path",  #3-21-26
+            "array_join(f.path_names, '|') AS path_name_path", #3-21-26
         ]
 
         for idx in range(max_depth):
@@ -301,7 +312,7 @@ class HierarchyViewBuilder:
         Rebuild the final leaf-level reporting view for all published versions.
         """
         logger.info("Rebuilding hierarchy leaf reporting view: %s", reporting_view)
-        max_depth = self._get_max_depth(dims_view)
+        max_depth = self.target_max_depth #self._get_max_depth(dims_view)
 
         publish_cols = [
             "hierarchy_id",
@@ -310,6 +321,7 @@ class HierarchyViewBuilder:
             "owner_team",
             "business_domain",
             "version_id",
+            "hier_ver_key",
             "version_name",
             "version_status",
             "effective_start_date",
@@ -322,6 +334,10 @@ class HierarchyViewBuilder:
             "depth",
             "root_account_key",
             "root_account_name",
+            "path_keys", # 3-21-26
+            "path_names", # 3-21-26
+            "path_key_path", # 3-21-26
+            "path_name_path", # 3-21-26
         ]
 
         for idx in range(max_depth):
@@ -359,7 +375,7 @@ class HierarchyViewBuilder:
             "Rebuilding hierarchy nodes reporting view: %s",
             nodes_reporting_view,
         )
-        max_depth = self._get_max_depth(nodes_dims_view)
+        max_depth = self.target_max_depth #self._get_max_depth(nodes_dims_view)
 
         publish_cols = [
             "hierarchy_id",
@@ -368,6 +384,7 @@ class HierarchyViewBuilder:
             "owner_team",
             "business_domain",
             "version_id",
+            "hier_ver_key",
             "version_name",
             "version_status",
             "effective_start_date",

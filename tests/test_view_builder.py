@@ -34,14 +34,7 @@ class FakeSpark:
 
 
 def test_rebuild_all_creates_leaf_and_all_node_views_in_order():
-    spark = FakeSpark(
-        depth_by_relation={
-            "catalog.schema.v_hierarchy_paths": 3,
-            "catalog.schema.v_hierarchy_flat": 3,
-            "catalog.schema.v_hierarchy_dims": 3,
-            "catalog.schema.v_hierarchy_nodes_dims": 3,
-        }
-    )
+    spark = FakeSpark()
 
     result = HierarchyViewBuilder(spark).rebuild_all(
         registry_table="catalog.schema.hierarchy_registry",
@@ -64,93 +57,96 @@ def test_rebuild_all_creates_leaf_and_all_node_views_in_order():
         "nodes_reporting_view": "catalog.schema.dim_reporting_hierarchy_nodes",
     }
     assert "CREATE OR REPLACE VIEW catalog.schema.v_hierarchy_paths AS" in spark.queries[0]
-    assert "CREATE OR REPLACE VIEW catalog.schema.v_hierarchy_flat AS" in spark.queries[2]
-    assert "CREATE OR REPLACE VIEW catalog.schema.v_hierarchy_dims AS" in spark.queries[4]
+    assert "CREATE OR REPLACE VIEW catalog.schema.v_hierarchy_flat AS" in spark.queries[1]
+    assert "CREATE OR REPLACE VIEW catalog.schema.v_hierarchy_dims AS" in spark.queries[2]
     assert (
         "CREATE OR REPLACE VIEW catalog.schema.dim_reporting_hierarchy AS"
-        in spark.queries[6]
+        in spark.queries[3]
     )
     assert (
         "CREATE OR REPLACE VIEW catalog.schema.v_hierarchy_nodes_dims AS"
-        in spark.queries[8]
+        in spark.queries[4]
     )
     assert (
         "CREATE OR REPLACE VIEW catalog.schema.dim_reporting_hierarchy_nodes AS"
-        in spark.queries[10]
+        in spark.queries[5]
     )
 
 
-def test_rebuild_flat_view_generates_level_columns_from_max_depth():
-    spark = FakeSpark(depth_by_relation={"catalog.schema.v_hierarchy_paths": 2})
+def test_rebuild_flat_view_generates_level_columns_from_target_max_depth():
+    spark = FakeSpark()
 
-    HierarchyViewBuilder(spark).rebuild_flat_view(
+    HierarchyViewBuilder(spark, target_max_depth=2).rebuild_flat_view(
         node_table="catalog.schema.base_hierarchy_node",
         paths_view="catalog.schema.v_hierarchy_paths",
         flat_view="catalog.schema.v_hierarchy_flat",
     )
 
-    view_sql = spark.queries[1]
+    view_sql = spark.queries[0]
     assert "level1_key" in view_sql
     assert "level1_name" in view_sql
     assert "level1_sort" in view_sql
     assert "level2_key" in view_sql
     assert "level2_name" in view_sql
     assert "level2_sort" in view_sql
+    assert "level3_key" not in view_sql
     assert "LEFT JOIN catalog.schema.base_hierarchy_node child" in view_sql
 
 
 def test_rebuild_leaf_reporting_view_filters_to_published_versions():
-    spark = FakeSpark(depth_by_relation={"catalog.schema.v_hierarchy_dims": 2})
+    spark = FakeSpark()
 
-    HierarchyViewBuilder(spark).rebuild_reporting_view(
+    HierarchyViewBuilder(spark, target_max_depth=2).rebuild_reporting_view(
         dims_view="catalog.schema.v_hierarchy_dims",
         reporting_view="catalog.schema.dim_reporting_hierarchy",
     )
 
-    view_sql = spark.queries[1]
+    view_sql = spark.queries[0]
     assert "FROM catalog.schema.v_hierarchy_dims" in view_sql
     assert "WHERE version_status = 'published'" in view_sql
     assert "leaf_key" in view_sql
+    assert "hier_ver_key" in view_sql
+    assert "path_key_path" in view_sql
+    assert "path_name_path" in view_sql
 
 
 def test_rebuild_nodes_reporting_view_filters_to_published_versions():
-    spark = FakeSpark(depth_by_relation={"catalog.schema.v_hierarchy_nodes_dims": 2})
+    spark = FakeSpark()
 
-    HierarchyViewBuilder(spark).rebuild_nodes_reporting_view(
+    HierarchyViewBuilder(spark, target_max_depth=2).rebuild_nodes_reporting_view(
         nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
         nodes_reporting_view="catalog.schema.dim_reporting_hierarchy_nodes",
     )
 
-    view_sql = spark.queries[1]
+    view_sql = spark.queries[0]
     assert "FROM catalog.schema.v_hierarchy_nodes_dims" in view_sql
     assert "WHERE version_status = 'published'" in view_sql
     assert "node_key" in view_sql
     assert "derived_is_leaf" in view_sql
+    assert "hier_ver_key" in view_sql
 
 
 def test_rebuild_nodes_dims_view_keeps_non_leaf_rows_available():
-    spark = FakeSpark(depth_by_relation={"catalog.schema.v_hierarchy_flat": 2})
+    spark = FakeSpark()
 
-    HierarchyViewBuilder(spark).rebuild_nodes_dims_view(
+    HierarchyViewBuilder(spark, target_max_depth=2).rebuild_nodes_dims_view(
         registry_table="catalog.schema.hierarchy_registry",
         version_table="catalog.schema.hierarchy_version",
         flat_view="catalog.schema.v_hierarchy_flat",
         nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
     )
 
-    view_sql = spark.queries[1]
+    view_sql = spark.queries[0]
     assert "FROM catalog.schema.v_hierarchy_flat f" in view_sql
     assert "WHERE f.derived_is_leaf = TRUE" not in view_sql
     assert "parent_account_key" in view_sql
     assert "derived_is_leaf" in view_sql
+    assert "array_join(f.path_keys, '|') AS path_key_path" in view_sql
+    assert "array_join(f.path_names, '|') AS path_name_path" in view_sql
 
 
 def test_get_max_depth_raises_when_no_depth_exists():
     spark = FakeSpark(depth_by_relation={"catalog.schema.v_hierarchy_paths": 0})
 
     with pytest.raises(ValueError, match="No hierarchy depth found"):
-        HierarchyViewBuilder(spark).rebuild_flat_view(
-            node_table="catalog.schema.base_hierarchy_node",
-            paths_view="catalog.schema.v_hierarchy_paths",
-            flat_view="catalog.schema.v_hierarchy_flat",
-        )
+        HierarchyViewBuilder(spark)._get_max_depth("catalog.schema.v_hierarchy_paths")
