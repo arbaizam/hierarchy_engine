@@ -1,7 +1,4 @@
-hierarchy:
-  hierarchy_name: "Test"
-  version_id: "V1"
-  version_name: "Version 1"
-  version_status: "draft"
-  effective_start_date: "2026-13-01"
-  nodes: {}
+hierarchy_name: "Test"
+version: "V1"
+description: "Example"
+nodes: {}

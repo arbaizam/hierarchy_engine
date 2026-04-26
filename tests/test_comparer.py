@@ -7,7 +7,7 @@ from tests.helpers import build_definition
 def test_compare_definitions_detects_rename():
     old_def = build_definition(nodes=[HierarchyNode(account_key="10000", account_name="Assets")])
     new_def = build_definition(
-        metadata_overrides={"version_id": "V2", "version_name": "Version 2"},
+        metadata_overrides={"version": "V2"},
         nodes=[HierarchyNode(account_key="10000", account_name="Assets Renamed")],
     )
 
@@ -27,7 +27,7 @@ def test_compare_definitions_detects_added_removed_and_reparented():
         ]
     )
     new_def = build_definition(
-        metadata_overrides={"version_id": "V2", "version_name": "Version 2"},
+        metadata_overrides={"version": "V2"},
         nodes=[
             HierarchyNode(
                 account_key="10000",

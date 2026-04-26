@@ -37,34 +37,22 @@ class HierarchyMetadata:
         Stable identifier for the hierarchy.
     hierarchy_name : str
         Human-readable hierarchy name.
-    hierarchy_description : str
-        Optional description of the hierarchy.
-    owner_team : str
-        Team responsible for maintaining the hierarchy.
-    business_domain : str
-        Domain or subject area for the hierarchy.
-    version_id : str
+    version : str
         Unique identifier for the hierarchy version.
-    version_name : str
-        Human-readable version name.
-    version_status : str
-        Lifecycle status such as 'draft', 'published', or 'retired'.
-    effective_start_date : date | None
-        Effective start date of the hierarchy version.
-    effective_end_date : date | None
-        Optional effective end date of the hierarchy version.
+    owner : str
+        Team or actor responsible for maintaining the hierarchy.
+    owner_department : str
+        Organization or department responsible for the hierarchy.
+    description : str
+        Optional description of the hierarchy.
     """
  
     hierarchy_id: str
     hierarchy_name: str
-    hierarchy_description: str = ""
-    owner_team: str = ""
-    business_domain: str = ""
-    version_id: str = ""
-    version_name: str = ""
-    version_status: str = "draft"
-    effective_start_date: date | None = None
-    effective_end_date: date | None = None
+    version: str = ""
+    owner: str = ""
+    owner_department: str = ""
+    description: str = ""
 
 
 @dataclass
@@ -119,7 +107,7 @@ class FlattenedHierarchyRow:
     ----------
     hierarchy_id : str
         Hierarchy identifier.
-    version_id : str
+    version : str
         Hierarchy version identifier.
     account_key : str
         Node key.
@@ -138,7 +126,7 @@ class FlattenedHierarchyRow:
     """
  
     hierarchy_id: str
-    version_id: str
+    version: str
     account_key: str
     account_name: str
     parent_account_key: str | None
@@ -146,6 +134,28 @@ class FlattenedHierarchyRow:
     node_path: str
     created_date: date
     updated_date: date
+
+
+@dataclass(frozen=True)
+class HierarchyVersionRow:
+    """Authoritative persisted hierarchy version row."""
+
+    hierarchy_id: str
+    hierarchy_name: str
+    version: str
+    status: str
+    description: str | None
+    payload_json: str
+    content_hash: str
+    node_count: int
+    leaf_count: int
+    max_depth: int
+    owner: str | None
+    owner_department: str | None
+    published_by: str | None
+    published_at: str | None
+    retired_by: str | None
+    retired_at: str | None
 
 
 # ---------------------------------------------------------------------------
@@ -182,13 +192,6 @@ class ValidationResult:
     """
     Structured validation result for a hierarchy validation run.
  
-    Parameters
-    ----------
-    passed : bool
-        Overall validation status. True means no errors were found.
-    issues : list[ValidationIssue]
-        Collection of validation issues discovered during the run.
- 
     Notes
     -----
     This object is intentionally UI/API friendly. It lets callers:
@@ -198,8 +201,14 @@ class ValidationResult:
     - decide whether to fail fast or continue with warnings
     """
  
-    passed: bool = True
     issues: list[ValidationIssue] = field(default_factory=list)
+
+    @property
+    def passed(self) -> bool:
+        """
+        Return whether the validation result currently contains no errors.
+        """
+        return not self.has_errors()
  
     def add_issue(
         self,
@@ -262,7 +271,6 @@ class ValidationResult:
         ValidationResult
             The same validation result instance with `passed` updated.
         """
-        self.passed = not self.has_errors()
         return self
  
     def to_text(self) -> str:

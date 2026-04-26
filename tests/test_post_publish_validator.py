@@ -1,5 +1,6 @@
-from datetime import date
+import pytest
 
+from hierarchy_engine.errors import HierarchyValidationError
 from hierarchy_engine.post_publish_validator import PostPublishHierarchyValidator
 
 
@@ -24,12 +25,13 @@ class FakeSpark:
         self.sql_results = sql_results
 
     def sql(self, query):
+        normalized_query = " ".join(query.split())
         for query_fragment, rows in sorted(
             self.sql_results.items(),
             key=lambda item: len(item[0]),
             reverse=True,
         ):
-            if query_fragment in query:
+            if " ".join(query_fragment.split()) in normalized_query:
                 return FakeQueryResult(rows)
         raise AssertionError(f"Unexpected SQL query: {query}")
 
@@ -37,16 +39,15 @@ class FakeSpark:
 def test_post_publish_validator_accepts_clean_persisted_state():
     spark = FakeSpark(
         {
-            "SELECT\n                account_key,\n                COUNT(*) AS row_count": [],
-            "SELECT\n                child.account_key,": [],
-            "SELECT\n                COUNT(*) AS current_count": [FakeRow(current_count=1)],
-            "SELECT\n                a.version_id AS version_id_1,": [],
+            "SELECT account_key, COUNT(*) AS row_count": [],
+            "SELECT child.account_key,": [],
+            "SELECT COUNT(*) AS current_count": [FakeRow(current_count=1)],
         }
     )
 
     result = PostPublishHierarchyValidator(spark).validate_version(
         hierarchy_id="TEST",
-        version_id="V1",
+        version="V1",
         node_table="nodes",
         version_table="versions",
     )
@@ -57,33 +58,23 @@ def test_post_publish_validator_accepts_clean_persisted_state():
 def test_post_publish_validator_reports_all_supported_issue_types():
     spark = FakeSpark(
         {
-            "SELECT\n                account_key,\n                COUNT(*) AS row_count": [
+            "SELECT account_key, COUNT(*) AS row_count": [
                 FakeRow(account_key="10000", row_count=2)
             ],
-            "SELECT\n                child.account_key,": [
+            "SELECT child.account_key,": [
                 FakeRow(
                     account_key="10100",
                     account_name="Investments",
                     parent_account_key="99999",
                 )
             ],
-            "SELECT\n                COUNT(*) AS current_count": [FakeRow(current_count=2)],
-            "SELECT\n                a.version_id AS version_id_1,": [
-                FakeRow(
-                    version_id_1="V1",
-                    version_id_2="V2",
-                    start_1=date(2026, 1, 1),
-                    end_1=None,
-                    start_2=date(2026, 6, 1),
-                    end_2=None,
-                )
-            ],
+            "SELECT COUNT(*) AS current_count": [FakeRow(current_count=2)],
         }
     )
 
     result = PostPublishHierarchyValidator(spark).validate_version(
         hierarchy_id="TEST",
-        version_id="V1",
+        version="V1",
         node_table="nodes",
         version_table="versions",
     )
@@ -91,5 +82,14 @@ def test_post_publish_validator_reports_all_supported_issue_types():
     check_names = {issue.check_name for issue in result.issues}
     assert "duplicate_persisted_node_rows" in check_names
     assert "missing_persisted_parent" in check_names
-    assert "multiple_current_versions" in check_names
-    assert "overlapping_effective_windows" in check_names
+    assert "multiple_published_versions" in check_names
+
+
+def test_post_publish_validator_rejects_invalid_table_identifier():
+    with pytest.raises(HierarchyValidationError, match="Invalid table identifier"):
+        PostPublishHierarchyValidator(FakeSpark({})).validate_version(
+            hierarchy_id="TEST",
+            version="V1",
+            node_table="nodes",
+            version_table="bad table",
+        )

@@ -1,16 +1,10 @@
-hierarchy:
-  hierarchy_id: "MVE_DOE"
-  hierarchy_name: "Duration of Equity - Example"
-  hierarchy_description: "Example DOE reporting hierarchy"
-  owner_team: "ALM Systems Engineering"
-  business_domain: "ALM" 
-  version_id: "v1.0"  
-  version_name: "2026 Q1 Initial versin"  
-  version_status: "draft"   
-  effective_start_date: "2026-01-01"
-  effective_end_date: null
-
-  nodes:
+hierarchy_id: "MVE_DOE"
+hierarchy_name: "Duration of Equity - Example"
+version: "v1.0"
+owner: "ALM Systems Engineering"
+owner_department: "ALM"
+description: "Example DOE reporting hierarchy"
+nodes:
     - account_key: "10000"
       account_name: "Assets"
       children:

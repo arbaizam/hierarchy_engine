@@ -16,7 +16,7 @@ def test_loader_parses_hierarchy_yaml():
     )
 
     assert definition.metadata.hierarchy_id == "TEST"
-    assert definition.metadata.effective_start_date.isoformat() == "2026-01-01"
+    assert definition.metadata.version == "V1"
     assert len(definition.nodes) == 1
     assert definition.nodes[0].account_key == "10000"
     assert definition.load_issues == []
@@ -47,11 +47,6 @@ def test_loader_raises_parse_error_for_invalid_yaml_syntax():
         HierarchyConfigLoader().load_from_yaml(FIXTURES_DIR / "invalid_yaml_syntax.yaml")
 
 
-def test_loader_raises_parse_error_when_hierarchy_section_is_missing():
-    with pytest.raises(HierarchyParseError, match="top-level 'hierarchy' section"):
-        HierarchyConfigLoader().load_from_yaml(FIXTURES_DIR / "missing_hierarchy_section.yaml")
-
-
 def test_loader_collects_field_level_issues_without_raising():
     definition = HierarchyConfigLoader().load_from_yaml(
         FIXTURES_DIR / "tolerant_invalid_fields.yaml"
@@ -61,16 +56,15 @@ def test_loader_collects_field_level_issues_without_raising():
     validation_result = HierarchyValidator().validate(definition)
 
     assert definition.metadata.hierarchy_id == ""
-    assert definition.metadata.effective_start_date is None
+    assert definition.metadata.owner == ""
     assert definition.nodes == []
-    assert "invalid_effective_start_date_format" in load_issue_names
     assert "invalid_nodes_collection" in load_issue_names
     assert any(
         issue.check_name == "missing_hierarchy_id"
         for issue in validation_result.issues
     )
     assert any(
-        issue.check_name == "missing_effective_start_date"
+        issue.check_name == "missing_owner"
         for issue in validation_result.issues
     )
 

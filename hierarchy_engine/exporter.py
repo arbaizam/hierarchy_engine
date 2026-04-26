@@ -15,8 +15,6 @@ Export is useful for:
 
 from __future__ import annotations
 
-from typing import Any
-
 import yaml
 
 from hierarchy_engine.models import HierarchyDefinition, HierarchyNode
@@ -26,14 +24,6 @@ class HierarchyYamlExporter:
     """
     Export hierarchy definitions to YAML.
     """
-
-    def _serialize_date(self, value: Any) -> str | None:
-        """Serialize date-like values without requiring pre-validation."""
-        if value is None:
-            return None
-        if hasattr(value, "isoformat"):
-            return value.isoformat()
-        return str(value)
 
     def to_dict(self, definition: HierarchyDefinition) -> dict[str, Any]:
         """
@@ -52,21 +42,13 @@ class HierarchyYamlExporter:
         meta = definition.metadata
 
         return {
-            "hierarchy": {
-                "hierarchy_id": meta.hierarchy_id,
-                "hierarchy_name": meta.hierarchy_name,
-                "hierarchy_description": meta.hierarchy_description,
-                "owner_team": meta.owner_team,
-                "business_domain": meta.business_domain,
-                "version_id": meta.version_id,
-                "version_name": meta.version_name,
-                "version_status": meta.version_status,
-                "effective_start_date": self._serialize_date(
-                    meta.effective_start_date
-                ),
-                "effective_end_date": self._serialize_date(meta.effective_end_date),
-                "nodes": [self._node_to_dict(node) for node in definition.nodes],
-            }
+            "hierarchy_id": meta.hierarchy_id,
+            "hierarchy_name": meta.hierarchy_name,
+            "version": meta.version,
+            "owner": meta.owner,
+            "owner_department": meta.owner_department,
+            "description": meta.description,
+            "nodes": [self._node_to_dict(node) for node in definition.nodes],
         }
 
     def _node_to_dict(self, node: HierarchyNode) -> dict[str, Any]:

@@ -129,7 +129,7 @@ class HierarchyFlattener:
         rows.append(
             FlattenedHierarchyRow(
                 hierarchy_id=metadata.hierarchy_id,
-                version_id=metadata.version_id,
+                version=metadata.version,
                 account_key=node.account_key,
                 account_name=node.account_name,
                 parent_account_key=parent_account_key,

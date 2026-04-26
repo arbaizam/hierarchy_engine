@@ -1,5 +1,6 @@
 import pytest
 
+from hierarchy_engine.errors import HierarchyValidationError
 from hierarchy_engine.view_builder import HierarchyViewBuilder
 
 
@@ -37,8 +38,7 @@ def test_rebuild_all_creates_leaf_and_all_node_views_in_order():
     spark = FakeSpark()
 
     result = HierarchyViewBuilder(spark).rebuild_all(
-        registry_table="catalog.schema.hierarchy_registry",
-        version_table="catalog.schema.hierarchy_version",
+        version_table="catalog.schema.hierarchy_versions",
         node_table="catalog.schema.base_hierarchy_node",
         paths_view="catalog.schema.v_hierarchy_paths",
         flat_view="catalog.schema.v_hierarchy_flat",
@@ -103,7 +103,7 @@ def test_rebuild_leaf_reporting_view_filters_to_published_versions():
 
     view_sql = spark.queries[0]
     assert "FROM catalog.schema.v_hierarchy_dims" in view_sql
-    assert "WHERE version_status = 'published'" in view_sql
+    assert "WHERE status = 'published'" in view_sql
     assert "leaf_key" in view_sql
     assert "hier_ver_key" in view_sql
     assert "path_key_path" in view_sql
@@ -120,18 +120,19 @@ def test_rebuild_nodes_reporting_view_filters_to_published_versions():
 
     view_sql = spark.queries[0]
     assert "FROM catalog.schema.v_hierarchy_nodes_dims" in view_sql
-    assert "WHERE version_status = 'published'" in view_sql
+    assert "WHERE status = 'published'" in view_sql
     assert "node_key" in view_sql
     assert "derived_is_leaf" in view_sql
     assert "hier_ver_key" in view_sql
+    assert "path_key_path" in view_sql
+    assert "path_name_path" in view_sql
 
 
 def test_rebuild_nodes_dims_view_keeps_non_leaf_rows_available():
     spark = FakeSpark()
 
     HierarchyViewBuilder(spark, target_max_depth=2).rebuild_nodes_dims_view(
-        registry_table="catalog.schema.hierarchy_registry",
-        version_table="catalog.schema.hierarchy_version",
+        version_table="catalog.schema.hierarchy_versions",
         flat_view="catalog.schema.v_hierarchy_flat",
         nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
     )
@@ -150,3 +151,13 @@ def test_get_max_depth_raises_when_no_depth_exists():
 
     with pytest.raises(ValueError, match="No hierarchy depth found"):
         HierarchyViewBuilder(spark)._get_max_depth("catalog.schema.v_hierarchy_paths")
+
+
+def test_view_builder_rejects_invalid_identifier():
+    spark = FakeSpark()
+
+    with pytest.raises(HierarchyValidationError, match="Invalid view identifier"):
+        HierarchyViewBuilder(spark).rebuild_reporting_view(
+            dims_view="catalog.schema.v_hierarchy_dims",
+            reporting_view="bad view",
+        )
