@@ -33,15 +33,15 @@ def test_loader_parses_hierarchy_yaml():
         ("malformed_root.yaml", "Root YAML object must be a dictionary"),
         (
             "malformed_hierarchy.yaml",
-            "Top-level 'hierarchy' section must be a dictionary",
+            "Legacy top-level 'hierarchy' wrapper is no longer supported",
         ),
     ],
 )
 def test_loader_raises_parse_error_for_malformed_yaml(fixture_name, message):
     """
-    What: Rejects malformed root payloads and malformed compatibility wrapper payloads.
-    Why: Structural corruption at the YAML object boundary should fail fast before tolerant field parsing begins.
-    Fails when: Non-dictionary root objects or invalid top-level wrapper objects slip through without a parse error.
+    What: Rejects malformed root payloads and the removed legacy top-level wrapper.
+    Why: The loader should fail fast on unsupported document shapes instead of attempting ambiguous fallback parsing.
+    Fails when: Non-dictionary root objects or wrapped legacy payloads slip through without a parse error.
     """
     with pytest.raises(HierarchyParseError, match=message):
         HierarchyConfigLoader().load_from_yaml(FIXTURES_DIR / fixture_name)

@@ -63,11 +63,12 @@ class HierarchyConfigLoader:
         if not isinstance(raw, dict):
             raise HierarchyParseError("Root YAML object must be a dictionary")
  
-        payload = raw
         if "hierarchy" in raw:
-            payload = raw["hierarchy"]
+            raise HierarchyParseError(
+                "Legacy top-level 'hierarchy' wrapper is no longer supported"
+            )
 
-        return self._parse_hierarchy(payload)
+        return self._parse_hierarchy(raw)
  
     def _add_issue(
         self,
@@ -107,7 +108,7 @@ class HierarchyConfigLoader:
             Parsed hierarchy definition.
         """
         if not isinstance(raw, dict):
-            raise HierarchyParseError("Top-level 'hierarchy' section must be a dictionary")
+            raise HierarchyParseError("Top-level hierarchy payload must be a dictionary")
  
         issues: list[ValidationIssue] = []
         raw_nodes = raw.get("nodes", [])

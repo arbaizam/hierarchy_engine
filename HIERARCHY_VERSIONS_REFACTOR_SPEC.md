@@ -259,16 +259,9 @@ The loader should:
 
 - parse a root-level mapping
 - no longer require a `hierarchy` wrapper
+- reject the legacy top-level `hierarchy` wrapper explicitly
 - tolerate missing required fields by recording load issues
 - parse `nodes` exactly as today
-
-Optional migration behavior:
-
-- temporarily accept wrapped payloads under `hierarchy` for a short transition
-  period
-- export only the new canonical root-level shape
-
-If temporary compatibility is added, it should be clearly marked transitional.
 
 ## Pre-structural validation
 

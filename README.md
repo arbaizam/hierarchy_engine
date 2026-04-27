@@ -98,7 +98,7 @@ Optional node fields:
 
 Notes:
 
-- The loader still tolerates a wrapped legacy `hierarchy:` payload during transition.
+- The loader rejects the legacy top-level `hierarchy:` wrapper.
 - YAML does not carry `draft`, `published`, or `retired`.
 - Publish writes `status = 'published'`.
 - Retirement is an explicit persistence operation.
@@ -569,7 +569,6 @@ python -m pytest tests --cov=hierarchy_engine --cov-report=term-missing -p no:ca
 
 - Publish remains append-oriented rather than fully transactional.
 - Retirement currently updates the authoritative version row only; derived node rows remain historical.
-- The loader still tolerates the legacy wrapped YAML shape during transition.
 - Only the `vw_hierarchy_published_*` views are lifecycle-filtered; intermediate path, flat, and dimension views include all persisted versions.
 - Publish operations for the same `hierarchy_id` should be treated as serialized work until transactional publish is implemented.
 - There is not yet a CLI entry point or API layer.
