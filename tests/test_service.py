@@ -271,7 +271,7 @@ def test_service_validate_published_version_delegates_to_post_publish_validator(
 
 def test_service_rebuild_reporting_views_delegates_to_view_builder(monkeypatch):
     builder = Mock()
-    builder.rebuild_all.return_value = {"reporting_view": "dim_reporting_hierarchy"}
+    builder.rebuild_all.return_value = {"reporting_view": "vw_hierarchy_published_leaves"}
     builder_class = Mock(return_value=builder)
     monkeypatch.setattr("hierarchy_engine.service.HierarchyViewBuilder", builder_class)
 
@@ -279,25 +279,25 @@ def test_service_rebuild_reporting_views_delegates_to_view_builder(monkeypatch):
         spark="spark",
         version_table="versions",
         node_table="nodes",
-        paths_view="v_paths",
-        flat_view="v_flat",
-        dims_view="v_dims",
-        reporting_view="dim_reporting_hierarchy",
-        nodes_dims_view="v_nodes_dims",
-        nodes_reporting_view="dim_reporting_hierarchy_nodes",
+        paths_view="vw_hierarchy_paths",
+        flat_view="vw_hierarchy_flat_nodes",
+        dims_view="vw_hierarchy_leaf_dimensions",
+        reporting_view="vw_hierarchy_published_leaves",
+        nodes_dims_view="vw_hierarchy_node_dimensions",
+        nodes_reporting_view="vw_hierarchy_published_nodes",
     )
 
-    assert result == {"reporting_view": "dim_reporting_hierarchy"}
+    assert result == {"reporting_view": "vw_hierarchy_published_leaves"}
     builder_class.assert_called_once_with("spark")
     builder.rebuild_all.assert_called_once_with(
         version_table="versions",
         node_table="nodes",
-        paths_view="v_paths",
-        flat_view="v_flat",
-        dims_view="v_dims",
-        reporting_view="dim_reporting_hierarchy",
-        nodes_dims_view="v_nodes_dims",
-        nodes_reporting_view="dim_reporting_hierarchy_nodes",
+        paths_view="vw_hierarchy_paths",
+        flat_view="vw_hierarchy_flat_nodes",
+        dims_view="vw_hierarchy_leaf_dimensions",
+        reporting_view="vw_hierarchy_published_leaves",
+        nodes_dims_view="vw_hierarchy_node_dimensions",
+        nodes_reporting_view="vw_hierarchy_published_nodes",
     )
 
 
@@ -312,12 +312,12 @@ def test_service_retire_and_rebuild_reporting_views_runs_retire_then_rebuild():
         node_table="nodes",
         hierarchy_id="TEST",
         version="V1",
-        paths_view="v_paths",
-        flat_view="v_flat",
-        dims_view="v_dims",
-        reporting_view="dim",
-        nodes_dims_view="v_nodes_dims",
-        nodes_reporting_view="dim_nodes",
+        paths_view="vw_hierarchy_paths",
+        flat_view="vw_hierarchy_flat_nodes",
+        dims_view="vw_hierarchy_leaf_dimensions",
+        reporting_view="vw_hierarchy_published_leaves",
+        nodes_dims_view="vw_hierarchy_node_dimensions",
+        nodes_reporting_view="vw_hierarchy_published_nodes",
         retired_by="engineer",
     )
 
@@ -334,12 +334,12 @@ def test_service_retire_and_rebuild_reporting_views_runs_retire_then_rebuild():
         spark="spark",
         version_table="versions",
         node_table="nodes",
-        paths_view="v_paths",
-        flat_view="v_flat",
-        dims_view="v_dims",
-        reporting_view="dim",
-        nodes_dims_view="v_nodes_dims",
-        nodes_reporting_view="dim_nodes",
+        paths_view="vw_hierarchy_paths",
+        flat_view="vw_hierarchy_flat_nodes",
+        dims_view="vw_hierarchy_leaf_dimensions",
+        reporting_view="vw_hierarchy_published_leaves",
+        nodes_dims_view="vw_hierarchy_node_dimensions",
+        nodes_reporting_view="vw_hierarchy_published_nodes",
     )
 
 
@@ -354,12 +354,12 @@ def test_service_publish_and_rebuild_reporting_views_runs_publish_then_rebuild()
         spark="spark",
         version_table="versions",
         node_table="nodes",
-        paths_view="v_paths",
-        flat_view="v_flat",
-        dims_view="v_dims",
-        reporting_view="dim",
-        nodes_dims_view="v_nodes_dims",
-        nodes_reporting_view="dim_nodes",
+        paths_view="vw_hierarchy_paths",
+        flat_view="vw_hierarchy_flat_nodes",
+        dims_view="vw_hierarchy_leaf_dimensions",
+        reporting_view="vw_hierarchy_published_leaves",
+        nodes_dims_view="vw_hierarchy_node_dimensions",
+        nodes_reporting_view="vw_hierarchy_published_nodes",
         published_by="engineer",
     )
 
@@ -377,12 +377,12 @@ def test_service_publish_and_rebuild_reporting_views_runs_publish_then_rebuild()
         spark="spark",
         version_table="versions",
         node_table="nodes",
-        paths_view="v_paths",
-        flat_view="v_flat",
-        dims_view="v_dims",
-        reporting_view="dim",
-        nodes_dims_view="v_nodes_dims",
-        nodes_reporting_view="dim_nodes",
+        paths_view="vw_hierarchy_paths",
+        flat_view="vw_hierarchy_flat_nodes",
+        dims_view="vw_hierarchy_leaf_dimensions",
+        reporting_view="vw_hierarchy_published_leaves",
+        nodes_dims_view="vw_hierarchy_node_dimensions",
+        nodes_reporting_view="vw_hierarchy_published_nodes",
     )
 
 

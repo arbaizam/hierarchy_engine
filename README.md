@@ -159,12 +159,12 @@ Expected columns:
 
 `HierarchyViewBuilder` rebuilds a standard structural view stack from the version table and node table:
 
-- `paths_view`
-- `flat_view`
-- `dims_view`
-- `reporting_view`
-- `nodes_dims_view`
-- `nodes_reporting_view`
+- `vw_hierarchy_paths`
+- `vw_hierarchy_flat_nodes`
+- `vw_hierarchy_leaf_dimensions`
+- `vw_hierarchy_published_leaves`
+- `vw_hierarchy_node_dimensions`
+- `vw_hierarchy_published_nodes`
 
 These are generic structural views. Project-specific semantic behavior should be layered downstream.
 
@@ -256,7 +256,7 @@ Current checks:
 
 - duplicate persisted version rows for `(hierarchy_id, version)`
 - existing persisted version row for `(hierarchy_id, version)`
-- existing published sibling for the same `hierarchy_name`
+- existing published sibling for the same `hierarchy_id`
 - existing node rows for `(hierarchy_id, version)`
 - duplicate persisted node rows by `account_key`
 
@@ -426,12 +426,12 @@ service.publish_and_rebuild_reporting_views(
     spark=spark,
     version_table="catalog.schema.hierarchy_versions",
     node_table="catalog.schema.base_hierarchy_node",
-    paths_view="catalog.schema.v_hierarchy_paths",
-    flat_view="catalog.schema.v_hierarchy_flat",
-    dims_view="catalog.schema.v_hierarchy_dims",
-    reporting_view="catalog.schema.dim_reporting_hierarchy",
-    nodes_dims_view="catalog.schema.v_hierarchy_nodes_dims",
-    nodes_reporting_view="catalog.schema.dim_reporting_hierarchy_nodes",
+    paths_view="catalog.schema.vw_hierarchy_paths",
+    flat_view="catalog.schema.vw_hierarchy_flat_nodes",
+    dims_view="catalog.schema.vw_hierarchy_leaf_dimensions",
+    reporting_view="catalog.schema.vw_hierarchy_published_leaves",
+    nodes_dims_view="catalog.schema.vw_hierarchy_node_dimensions",
+    nodes_reporting_view="catalog.schema.vw_hierarchy_published_nodes",
     node_write_mode="append",
     published_by="your.user",
 )
