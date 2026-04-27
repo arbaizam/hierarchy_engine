@@ -120,7 +120,7 @@ def test_service_publish_to_tables_runs_all_validation_layers_before_writing(mon
     """
     What: Runs pre-structural, post-structural, and pre-publish validation before writing version and node tables.
     Why: Publish orchestration should only persist data after every in-memory and persistence gate has passed.
-    Fails when: Validation order changes, flattened rows are not audited, or repository writes occur with missing checks.
+    Fails when: Validation order changes, flattened rows are not audited, or non-transactional publish writes the authoritative row before derived nodes.
     """
     repo_instance = Mock()
     repo_instance.rows_to_dataframe.return_value = "rows_df"
@@ -158,17 +158,19 @@ def test_service_publish_to_tables_runs_all_validation_layers_before_writing(mon
     )
     repo_class.assert_called_once_with(spark)
     repo_instance.rows_to_dataframe.assert_called_once()
+    assert repo_instance.method_calls[1][0] == "write_nodes"
+    assert repo_instance.method_calls[2][0] == "write_version"
+    repo_instance.write_nodes.assert_called_once_with(
+        rows_df="rows_df",
+        table_name="nodes",
+        mode="overwrite",
+    )
     repo_instance.write_version.assert_called_once_with(
         definition=definition,
         table_name="version",
         status="published",
         published_by="engineer",
         published_at="2026-04-26T12:00:00Z",
-    )
-    repo_instance.write_nodes.assert_called_once_with(
-        rows_df="rows_df",
-        table_name="nodes",
-        mode="overwrite",
     )
 
 

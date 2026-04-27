@@ -411,16 +411,32 @@ service.publish_to_tables(
 2. flattening with system dates
 3. strict post-structural validation on those exact rows
 4. strict pre-publish validation against persisted state
-5. authoritative version-row write
-6. derived node-row write
+5. derived node-row write
+6. authoritative version-row write
 
 ### Recover from a Partial Publish
 
 `publish_to_tables(...)` is not yet transactional across `hierarchy_versions` and `base_hierarchy_node`.
 
-If the version-row write succeeds and the node-row write fails, later publishes can be blocked by the existing `published` version row even though the node rows were never materialized.
+The service writes derived node rows first and the authoritative version row second.
+
+If the node-row write succeeds and the version-row write fails, the result is orphaned derived rows with no authoritative published version. Published reporting views remain empty because they join through `hierarchy_versions`.
 
 Current recovery path:
+
+1. inspect `base_hierarchy_node` for orphan rows for the target `(hierarchy_id, version)`
+2. delete those orphan derived rows or overwrite that version cleanly before retrying
+3. re-run the publish
+
+This ordering is intentional. In a non-transactional workspace, orphaned derived rows are safer than a published authoritative version row with no node rows behind it.
+
+Operationally:
+
+- published consumers continue to see nothing until the authoritative row exists
+- publishes for the same `hierarchy_id` should still be serialized
+- orphaned node rows are derived-state cleanup, not source-of-truth corruption
+
+If an older environment previously wrote the authoritative row first, the historical recovery path still applies:
 
 1. inspect the authoritative row in `hierarchy_versions`
 2. retire the orphaned published version with `retire_version(...)`
@@ -567,7 +583,7 @@ python -m pytest tests --cov=hierarchy_engine --cov-report=term-missing -p no:ca
 
 ## Current Limitations
 
-- Publish remains append-oriented rather than fully transactional.
+- Publish remains non-transactional across `hierarchy_versions` and `base_hierarchy_node`.
 - Retirement currently updates the authoritative version row only; derived node rows remain historical.
 - Only the `vw_hierarchy_published_*` views are lifecycle-filtered; intermediate path, flat, and dimension views include all persisted versions.
 - Publish operations for the same `hierarchy_id` should be treated as serialized work until transactional publish is implemented.

@@ -140,8 +140,12 @@ The service layer should expose two explicit lifecycle operations:
 2. validate the authored structure
 3. normalize/serialize the canonical payload
 4. validate publish-time persistence constraints
-5. persist one authoritative `hierarchy_versions` row with status `published`
-6. rebuild or append derived node rows for that version
+5. rebuild or append derived node rows for that version
+6. persist one authoritative `hierarchy_versions` row with status `published`
+
+Given the current workspace limitation, this ordering is intentional. Derived
+rows may be orphaned and cleaned up, but published reporting should not observe
+an authoritative published version row that has no node rows behind it.
 
 `retire_version(...)` should:
 

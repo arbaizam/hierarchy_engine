@@ -386,6 +386,11 @@ class HierarchyService:
 
         Optional post-publish validation remains available separately through
         `validate_published_version(...)` for audit or diagnostics use cases.
+
+        This workspace does not support atomic multi-table transactions. The
+        service therefore writes derived node rows first and the authoritative
+        version row second so a failure does not leave a published version row
+        with no node rows behind it.
         """
         logger.info(
             "Publishing hierarchy_id=%s version=%s to version=%s node=%s",
@@ -417,6 +422,19 @@ class HierarchyService:
         rows_df = repo.rows_to_dataframe(row_dicts)
 
         logger.info(
+            "Writing node rows for hierarchy_id=%s version=%s to %s with mode=%s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version,
+            node_table,
+            node_write_mode,
+        )
+        repo.write_nodes(
+            rows_df=rows_df,
+            table_name=node_table,
+            mode=node_write_mode,
+        )
+
+        logger.info(
             "Writing authoritative version row for hierarchy_id=%s version=%s to %s",
             definition.metadata.hierarchy_id,
             definition.metadata.version,
@@ -428,19 +446,6 @@ class HierarchyService:
             status="published",
             published_by=published_by,
             published_at=persisted_at,
-        )
- 
-        logger.info(
-            "Writing node rows for hierarchy_id=%s version=%s to %s with mode=%s",
-            definition.metadata.hierarchy_id,
-            definition.metadata.version,
-            node_table,
-            node_write_mode,
-        )
-        repo.write_nodes(
-            rows_df=rows_df,
-            table_name=node_table,
-            mode=node_write_mode,
         )
  
     def retire_version(

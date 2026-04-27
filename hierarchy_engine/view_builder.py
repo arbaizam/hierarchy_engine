@@ -173,6 +173,7 @@ class HierarchyViewBuilder:
             SELECT DISTINCT
                 hierarchy_id,
                 version,
+                account_key,
                 parent_account_key
             FROM {node_table}
             WHERE parent_account_key IS NOT NULL
