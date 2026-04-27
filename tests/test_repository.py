@@ -70,6 +70,11 @@ class FakeSpark:
 
 
 def test_rows_to_dataframe_passes_rows_to_spark():
+    """
+    What: Converts flattened row dictionaries into a Spark DataFrame using the node table schema.
+    Why: Repository writes depend on stable schema ordering and typed DataFrame creation.
+    Fails when: Row payloads stop being passed through intact or the node schema columns drift unexpectedly.
+    """
     spark = FakeSpark()
     rows = [{"account_key": "10000"}]
 
@@ -81,6 +86,11 @@ def test_rows_to_dataframe_passes_rows_to_spark():
 
 
 def test_create_base_tables_creates_empty_tables_from_explicit_schemas():
+    """
+    What: Creates empty version and node tables from the repository's explicit schemas.
+    Why: Bootstrapping a new environment should not depend on pre-existing DDL outside the library.
+    Fails when: Base-table creation uses the wrong schemas, write mode, or table targets.
+    """
     spark = FakeSpark()
 
     HierarchyRepository(spark).create_base_tables(
@@ -99,6 +109,11 @@ def test_create_base_tables_creates_empty_tables_from_explicit_schemas():
 
 
 def test_write_version_creates_append_table_payload():
+    """
+    What: Serializes and appends a published hierarchy version row to the authoritative version table.
+    Why: The authoritative persistence model depends on a complete version payload with status and canonical JSON.
+    Fails when: Version rows lose lifecycle metadata, payload JSON, or append-write semantics.
+    """
     spark = FakeSpark()
 
     HierarchyRepository(spark).write_version(
@@ -118,6 +133,11 @@ def test_write_version_creates_append_table_payload():
 
 
 def test_write_nodes_uses_requested_mode():
+    """
+    What: Writes derived node rows using the caller-specified save mode.
+    Why: Rebuild and test flows rely on being able to switch between append and overwrite semantics deliberately.
+    Fails when: Node writes ignore the requested mode or target the wrong table.
+    """
     spark = FakeSpark()
     rows_df = FakeDataFrame([{"account_key": "10000"}])
 
@@ -128,6 +148,11 @@ def test_write_nodes_uses_requested_mode():
 
 
 def test_table_exists_delegates_to_catalog():
+    """
+    What: Delegates table-existence checks to the Spark catalog.
+    Why: Persistence validators should use the runtime catalog truth instead of maintaining their own cache.
+    Fails when: Existing tables are missed or missing tables are reported as present.
+    """
     spark = FakeSpark(existing_tables={"version_table"})
 
     repo = HierarchyRepository(spark)
@@ -137,12 +162,22 @@ def test_table_exists_delegates_to_catalog():
 
 
 def test_version_exists_returns_false_when_table_missing():
+    """
+    What: Returns `False` for version existence checks when the version table is absent.
+    Why: Fresh environments should not fail existence probes before base tables are created.
+    Fails when: Missing version tables raise unexpectedly or report phantom version rows.
+    """
     spark = FakeSpark(existing_tables=set())
 
     assert HierarchyRepository(spark).version_exists("version_table", "TEST", "V1") is False
 
 
 def test_version_exists_queries_row_count():
+    """
+    What: Interprets a positive row count as an existing `(hierarchy_id, version)` record.
+    Why: Publish idempotency depends on a precise existence check against the authoritative version table.
+    Fails when: Persisted version counts are ignored or evaluated with the wrong truthiness.
+    """
     spark = FakeSpark(
         existing_tables={"version_table"},
         sql_results={
@@ -154,6 +189,11 @@ def test_version_exists_queries_row_count():
 
 
 def test_published_version_exists_queries_row_count():
+    """
+    What: Detects whether a hierarchy already has a published version row.
+    Why: The service enforces one published version per hierarchy identifier at publish time.
+    Fails when: Published sibling detection stops honoring persisted row counts.
+    """
     spark = FakeSpark(
         existing_tables={"version_table"},
         sql_results={
@@ -165,6 +205,11 @@ def test_published_version_exists_queries_row_count():
 
 
 def test_repository_rejects_invalid_table_identifier():
+    """
+    What: Rejects invalid table identifiers before issuing repository SQL.
+    Why: Repository methods are the lowest common SQL boundary and need identifier hardening.
+    Fails when: Unsafe table names bypass validation and reach the query builder.
+    """
     spark = FakeSpark()
 
     with pytest.raises(HierarchyValidationError, match="Invalid table identifier"):
@@ -172,12 +217,22 @@ def test_repository_rejects_invalid_table_identifier():
 
 
 def test_get_version_status_returns_none_when_row_missing():
+    """
+    What: Returns `None` when no persisted version row exists for the requested hierarchy/version.
+    Why: Retirement and validation flows need a clean missing-row signal instead of a fabricated lifecycle state.
+    Fails when: Missing versions produce the wrong default status.
+    """
     spark = FakeSpark(existing_tables={"version_table"})
 
     assert HierarchyRepository(spark).get_version_status("version_table", "TEST", "V1") is None
 
 
 def test_get_version_status_reads_persisted_status():
+    """
+    What: Reads the persisted lifecycle status from the authoritative version table.
+    Why: Retirement guards should act on the stored state, not on assumptions from the caller.
+    Fails when: Status lookups stop returning the value stored in persistence.
+    """
     spark = FakeSpark(
         existing_tables={"version_table"},
         sql_results={
@@ -189,6 +244,11 @@ def test_get_version_status_reads_persisted_status():
 
 
 def test_retire_version_emits_update_statement():
+    """
+    What: Updates a published version row to `retired` with actor and timestamp metadata.
+    Why: Retirement is the persisted lifecycle transition that removes a version from published reporting views.
+    Fails when: The repository stops issuing the expected status update, omits retirement metadata, or weakens the target WHERE clause.
+    """
     spark = FakeSpark(
         existing_tables={"version_table"},
         sql_results={
@@ -206,9 +266,16 @@ def test_retire_version_emits_update_statement():
 
     assert any("UPDATE version_table" in query for query in spark.queries)
     assert any("status = 'retired'" in query for query in spark.queries)
+    assert any("WHERE hierarchy_id = 'TEST'" in query for query in spark.queries)
+    assert any("AND version = 'V1'" in query for query in spark.queries)
 
 
 def test_retire_version_raises_when_version_missing():
+    """
+    What: Raises when asked to retire a hierarchy version that does not exist.
+    Why: Silent no-op retirements would hide operator mistakes and make lifecycle state ambiguous.
+    Fails when: Missing version rows are treated as successful retirements.
+    """
     spark = FakeSpark(existing_tables={"version_table"})
 
     with pytest.raises(HierarchyValidationError, match="does not exist in persistence"):
@@ -220,6 +287,11 @@ def test_retire_version_raises_when_version_missing():
 
 
 def test_retire_version_raises_when_not_published():
+    """
+    What: Raises when asked to retire a version whose persisted status is not `published`.
+    Why: Lifecycle transitions should enforce the published-to-retired path explicitly.
+    Fails when: Already retired or otherwise non-published rows can be retired again silently.
+    """
     spark = FakeSpark(
         existing_tables={"version_table"},
         sql_results={
@@ -233,3 +305,4 @@ def test_retire_version_raises_when_not_published():
             "TEST",
             "V1",
         )
+

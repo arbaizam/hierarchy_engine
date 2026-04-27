@@ -1,28 +1,11 @@
 
 """
-Domain models for the hierarchy engine.
- 
-These dataclasses define the canonical in-memory representation of a hierarchy
-and its validation artifacts.
- 
-Design notes
-------------
-The YAML authoring format is nested and tree-shaped because that is easiest
-for users to read and maintain.
- 
-The database representation is adjacency-list shaped because that is easiest
-to store, validate, and derive downstream views from.
- 
-This module defines:
-- nested tree objects for authoring/loading
-- flattened row objects for persistence
-- validation result objects for structured error reporting
+Canonical hierarchy models and validation result types.
 """
  
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date
 from typing import Any
 
 
@@ -102,27 +85,6 @@ class HierarchyDefinition:
 class FlattenedHierarchyRow:
     """
     Flattened adjacency-list row for persistence.
- 
-    Parameters
-    ----------
-    hierarchy_id : str
-        Hierarchy identifier.
-    version : str
-        Hierarchy version identifier.
-    account_key : str
-        Node key.
-    account_name : str
-        Node name.
-    parent_account_key : str | None
-        Parent node key. Null for root nodes.
-    account_level : int
-        Depth of the node in the hierarchy, starting at 1 for roots.
-    node_path : str
-        Delimited path of keys from root to the node.
-    created_date : date
-        Creation date string used for loading.
-    updated_date : date
-        Update date string used for loading.
     """
  
     hierarchy_id: str
@@ -132,13 +94,15 @@ class FlattenedHierarchyRow:
     parent_account_key: str | None
     account_level: int
     node_path: str
-    created_date: date
-    updated_date: date
+    created_at: str
+    updated_at: str
 
 
 @dataclass(frozen=True)
 class HierarchyVersionRow:
-    """Authoritative persisted hierarchy version row."""
+    """
+    Authoritative persisted hierarchy version row.
+    """
 
     hierarchy_id: str
     hierarchy_name: str
@@ -177,8 +141,8 @@ class ValidationIssue:
     message : str
         Human-readable description of the issue.
     details : dict[str, Any] | None
-        Optional structured details, such as the offending account_key or
-        effective date values.
+        Optional structured details, such as offending keys, row counts, or
+        expected-versus-actual identity fields.
     """
  
     severity: str

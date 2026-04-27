@@ -107,8 +107,8 @@ rows. It should keep:
 - `parent_account_key`
 - `account_level`
 - `node_path`
-- `created_date`
-- `updated_date`
+- `created_at`
+- `updated_at`
 
 The field currently named `version_id` in flattened rows should be renamed to
 `version` to match the canonical metadata model.
@@ -123,6 +123,9 @@ Supported persisted statuses:
 - `retired`
 
 There is no persisted `draft` state and no authored `draft` state.
+
+Until transactional publish is implemented, publish operations for the same
+`hierarchy_id` are assumed to be serialized by the calling workflow.
 
 ### Service operations
 
@@ -200,8 +203,8 @@ Proposed schema:
 - `parent_account_key`
 - `account_level`
 - `node_path`
-- `created_date`
-- `updated_date`
+- `created_at`
+- `updated_at`
 
 ## Removed or deprecated base table
 
@@ -229,6 +232,10 @@ Responsibilities:
 - serialize to stable `payload_json`
 - compute `content_hash`
 - reconstruct `HierarchyDefinition` from `payload_json`
+
+The hierarchy exporter should be the source of the canonical persisted payload,
+mirroring the `rules_engine` pattern where the serializer hashes and stores the
+same canonical authoring payload the exporter emits.
 
 The canonical payload should match the root-level YAML structure:
 
@@ -293,7 +300,7 @@ rules-engine-style authoritative-row model.
 Required checks:
 
 - the same `(hierarchy_id, version)` must not already exist
-- no other version of the same `hierarchy_name` may currently be `published`
+- no other version of the same `hierarchy_id` may currently be `published`
 - derived node rows for the same `(hierarchy_id, version)` must not already
   exist unless an explicit rebuild mode is introduced
 

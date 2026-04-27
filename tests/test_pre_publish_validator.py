@@ -47,6 +47,11 @@ class FakeSpark:
 
 
 def test_pre_publish_validator_accepts_clean_persistence_state():
+    """
+    What: Accepts a persistence state with no existing version, no published conflict, and no derived node rows.
+    Why: Clean first-time publishes should not be blocked by the pre-write gate.
+    Fails when: Empty version/node tables still produce persistence conflicts.
+    """
     metadata = build_definition().metadata
     spark = FakeSpark(
         existing_tables={"version", "nodes"},
@@ -68,6 +73,11 @@ def test_pre_publish_validator_accepts_clean_persistence_state():
 
 
 def test_pre_publish_validator_reports_existing_version_and_node_rows():
+    """
+    What: Reports duplicate persisted versions, existing node rows, and duplicated node keys for the target publish.
+    Why: The pre-write gate must protect idempotency and detect partially corrupted persistence state before another publish.
+    Fails when: Existing version or node collisions stop surfacing as explicit blocking issues.
+    """
     metadata = build_definition().metadata
     spark = FakeSpark(
         existing_tables={"version", "nodes"},
@@ -95,6 +105,11 @@ def test_pre_publish_validator_reports_existing_version_and_node_rows():
 
 
 def test_pre_publish_validator_reports_published_name_conflict():
+    """
+    What: Reports a published-version conflict when the same hierarchy identifier already has a published row.
+    Why: Only one published version per hierarchy should be visible to reporting consumers at a time.
+    Fails when: Existing published siblings keyed by `hierarchy_id` no longer block a new publish.
+    """
     metadata = build_definition().metadata
     spark = FakeSpark(
         existing_tables={"version", "nodes"},
@@ -117,6 +132,11 @@ def test_pre_publish_validator_reports_published_name_conflict():
 
 
 def test_pre_publish_validator_rejects_invalid_table_identifier():
+    """
+    What: Rejects invalid SQL identifiers before running any pre-publish queries.
+    Why: Table names are interpolated into Spark SQL and need explicit validation at the boundary.
+    Fails when: Unsafe table identifiers reach the query builder instead of raising a validation error.
+    """
     metadata = build_definition().metadata
 
     with pytest.raises(HierarchyValidationError, match="Invalid table identifier"):
@@ -125,3 +145,4 @@ def test_pre_publish_validator_rejects_invalid_table_identifier():
             version_table="bad table",
             node_table="nodes",
         )
+

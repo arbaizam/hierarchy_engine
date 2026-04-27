@@ -1,37 +1,5 @@
- 
 """
-Post-publish Spark validation for persisted hierarchy data.
- 
-This module validates hierarchy artifacts *after* they have been written to
-Spark / Databricks tables.
- 
-Why this module exists
-----------------------
-The in-memory validator checks the authored hierarchy definition before publish.
-That catches structural issues in the YAML-derived object model.
- 
-The normal publish path should also perform a pre-write persistence validation
-pass before any table writes occur.
-
-This module remains useful after persistence when you need audit or diagnostic
-checks such as:
- 
-- duplicate persisted node rows
-- missing parent rows in the persisted node table
-- multiple current versions in the version table
-- overlapping effective date windows across versions
- 
-These checks are best implemented against persisted tables and DataFrames.
-They are read-only and intended for already-persisted data rather than for
-blocking the normal publish flow.
- 
-Design notes
-------------
-This validator returns the same `ValidationResult` model used by the
-in-memory validator. That keeps the validation experience consistent across
-both layers.
- 
-This module is intentionally read-only. It does not modify tables.
+Post-publish audit validation for persisted hierarchy data.
 """
  
 from __future__ import annotations
@@ -43,22 +11,12 @@ from hierarchy_engine.sql_identifiers import validate_sql_identifier
  
 class PostPublishHierarchyValidator:
     """
-    Validate published hierarchy artifacts in Spark tables.
- 
-    Parameters
-    ----------
-    spark : SparkSession
-        Active Spark session used to query persisted hierarchy tables.
+    Validate persisted hierarchy artifacts in Spark tables.
     """
  
     def __init__(self, spark: SparkSession):
         """
-        Initialize the post-publish validator.
- 
-        Parameters
-        ----------
-        spark : SparkSession
-            Active Spark session.
+        Create a post-publish validator for persisted hierarchy tables.
         """
         self.spark = spark
 
@@ -75,27 +33,10 @@ class PostPublishHierarchyValidator:
     ) -> ValidationResult:
         """
         Validate a published hierarchy version across persisted tables.
- 
-        Parameters
-        ----------
-        hierarchy_id : str
-            Hierarchy identifier to validate.
-        version : str
-            Hierarchy version identifier to validate.
-        node_table : str
-            Fully qualified Spark table containing flattened hierarchy nodes.
-        version_table : str
-            Fully qualified Spark table containing hierarchy version metadata.
- 
-        Returns
-        -------
-        ValidationResult
-            Structured validation result.
- 
-        Notes
-        -----
-        This method runs all currently supported post-publish checks and
-        accumulates issues rather than stopping at the first failure.
+
+        This method is intentionally read-only. It checks persisted node rows
+        and lifecycle metadata after publish or retire operations have already
+        occurred.
         """
         validate_sql_identifier(node_table, kind="table")
         validate_sql_identifier(version_table, kind="table")
@@ -257,7 +198,7 @@ class PostPublishHierarchyValidator:
             )
  
     # ---------------------------------------------------------------------
-    # Multiple current versions check
+    # Multiple published versions check
     # ---------------------------------------------------------------------
  
     def _validate_multiple_published_versions(
@@ -267,24 +208,12 @@ class PostPublishHierarchyValidator:
         result: ValidationResult,
     ) -> None:
         """
-        Detect multiple published versions for the same hierarchy name.
- 
-        Parameters
-        ----------
-        hierarchy_id : str
-            Hierarchy identifier.
-        version_table : str
-            Fully qualified version table name.
-        result : ValidationResult
-            Mutable validation result accumulator.
- 
-        Notes
-        -----
+        Detect multiple published versions for the same hierarchy id.
+
         Most environments should allow at most one `status = published`
-        version for a given hierarchy_id at a time.
- 
-        If multiple current versions exist, downstream consumers may not know
-        which version to treat as authoritative.
+        version for a given hierarchy_id at a time. If multiple published rows
+        exist, downstream consumers may not know which version to treat as the
+        active release.
         """
         current_df = self.spark.sql(f"""
             SELECT

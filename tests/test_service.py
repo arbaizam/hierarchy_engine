@@ -11,6 +11,11 @@ from tests.helpers import build_definition
 
 
 def test_service_load_validate_flatten():
+    """
+    What: Runs the basic load, validate, and flatten workflow through the service facade.
+    Why: The service is the notebook-facing orchestration layer and needs a working happy path end to end.
+    Fails when: Valid YAML stops validating cleanly or flattening no longer produces the expected rows.
+    """
     fixture_path = Path(__file__).parent / "fixtures" / "valid_hierarchy.yaml"
 
     svc = HierarchyService()
@@ -23,6 +28,11 @@ def test_service_load_validate_flatten():
 
 
 def test_service_get_validation_result_returns_validator_output():
+    """
+    What: Returns the validator result object produced by the injected pre-structural validator.
+    Why: Service helpers should be thin orchestration wrappers, not alternate validation implementations.
+    Fails when: The service stops delegating to the configured validator or mutates its result.
+    """
     validator = Mock()
     validator.validate.return_value = ValidationResult()
     service = HierarchyService(validator=validator)
@@ -35,6 +45,11 @@ def test_service_get_validation_result_returns_validator_output():
 
 
 def test_service_helper_methods_delegate():
+    """
+    What: Delegates rendering, diffing, and YAML export helper methods to the injected collaborators.
+    Why: The service facade should preserve collaborator behavior instead of duplicating presentation logic.
+    Fails when: Tree rendering, diff rendering, or export no longer route through the configured helpers.
+    """
     renderer = Mock()
     comparer = Mock()
     exporter = Mock()
@@ -56,6 +71,11 @@ def test_service_helper_methods_delegate():
 
 
 def test_service_to_dataframe_uses_repository(monkeypatch):
+    """
+    What: Uses the repository to convert flattened rows into a Spark DataFrame.
+    Why: DataFrame schema ownership lives in the repository and should not be reimplemented in the service.
+    Fails when: The service bypasses repository schema logic during DataFrame conversion.
+    """
     repo_instance = Mock()
     repo_instance.rows_to_dataframe.return_value = "df"
     repo_class = Mock(return_value=repo_instance)
@@ -72,6 +92,11 @@ def test_service_to_dataframe_uses_repository(monkeypatch):
 
 
 def test_service_create_base_tables_delegates_to_repository(monkeypatch):
+    """
+    What: Delegates base-table creation to the repository with the caller's table names and mode.
+    Why: Environment bootstrap should stay centralized in the persistence layer.
+    Fails when: Base-table creation stops passing through the requested targets or save mode.
+    """
     repo_instance = Mock()
     repo_class = Mock(return_value=repo_instance)
     monkeypatch.setattr("hierarchy_engine.service.HierarchyRepository", repo_class)
@@ -92,6 +117,11 @@ def test_service_create_base_tables_delegates_to_repository(monkeypatch):
 
 
 def test_service_publish_to_tables_runs_all_validation_layers_before_writing(monkeypatch):
+    """
+    What: Runs pre-structural, post-structural, and pre-publish validation before writing version and node tables.
+    Why: Publish orchestration should only persist data after every in-memory and persistence gate has passed.
+    Fails when: Validation order changes, flattened rows are not audited, or repository writes occur with missing checks.
+    """
     repo_instance = Mock()
     repo_instance.rows_to_dataframe.return_value = "rows_df"
     repo_class = Mock(return_value=repo_instance)
@@ -143,6 +173,11 @@ def test_service_publish_to_tables_runs_all_validation_layers_before_writing(mon
 
 
 def test_service_publish_to_tables_blocks_invalid_definitions_before_writing(monkeypatch):
+    """
+    What: Stops the publish workflow before repository creation when authored metadata is invalid.
+    Why: Bad definitions should fail fast without touching persistence infrastructure at all.
+    Fails when: Invalid authored hierarchies still instantiate repository writes.
+    """
     repo_class = Mock()
     monkeypatch.setattr("hierarchy_engine.service.HierarchyRepository", repo_class)
 
@@ -161,6 +196,11 @@ def test_service_publish_to_tables_blocks_invalid_definitions_before_writing(mon
 
 
 def test_service_publish_to_tables_blocks_pre_publish_failures_before_repository_writes(monkeypatch):
+    """
+    What: Stops the publish workflow when pre-publish persistence validation reports a conflict.
+    Why: Existing version or node collisions should block writes before any repository side effect occurs.
+    Fails when: Pre-publish failures still instantiate the repository or attempt version/node writes.
+    """
     repo_instance = Mock()
     repo_class = Mock(return_value=repo_instance)
     monkeypatch.setattr("hierarchy_engine.service.HierarchyRepository", repo_class)
@@ -184,6 +224,11 @@ def test_service_publish_to_tables_blocks_pre_publish_failures_before_repository
 
 
 def test_service_validate_post_structural_raises_when_flattened_rows_are_invalid(monkeypatch):
+    """
+    What: Raises a service-level validation error when post-structural row validation fails.
+    Why: Broken flattened rows should halt publish orchestration with a clear phase-specific failure.
+    Fails when: Post-structural errors are returned silently instead of blocking the caller.
+    """
     failed_result = ValidationResult()
     failed_result.add_issue("ERROR", "bad_rows", "bad rows")
     failed_result.finalize()
@@ -199,6 +244,11 @@ def test_service_validate_post_structural_raises_when_flattened_rows_are_invalid
 
 
 def test_service_validate_pre_publish_raises_when_persistence_conflicts_exist(monkeypatch):
+    """
+    What: Raises a service-level validation error when persistence state blocks a publish.
+    Why: Notebook callers should get a blocking exception instead of having to inspect raw validator results manually.
+    Fails when: Pre-publish conflicts stop surfacing as `HierarchyValidationError`.
+    """
     failed_result = ValidationResult()
     failed_result.add_issue("ERROR", "conflict", "conflict")
     failed_result.finalize()
@@ -219,6 +269,11 @@ def test_service_validate_pre_publish_raises_when_persistence_conflicts_exist(mo
 
 
 def test_service_retire_version_delegates_to_repository(monkeypatch):
+    """
+    What: Delegates lifecycle retirement to the repository with explicit actor and timestamp metadata.
+    Why: The service should stay thin while still exposing the full retirement contract to callers.
+    Fails when: Retirement arguments stop flowing through to the persistence layer intact.
+    """
     repo_instance = Mock()
     repo_class = Mock(return_value=repo_instance)
     monkeypatch.setattr("hierarchy_engine.service.HierarchyRepository", repo_class)
@@ -243,6 +298,11 @@ def test_service_retire_version_delegates_to_repository(monkeypatch):
 
 
 def test_service_validate_published_version_delegates_to_post_publish_validator(monkeypatch):
+    """
+    What: Delegates published-version audits to the post-publish validator and returns its result.
+    Why: Operational audit behavior should stay encapsulated in the validator layer, not recreated in the service.
+    Fails when: Published-version audits stop using the injected validator or stop returning its output.
+    """
     validator = Mock()
     validator.validate_version.return_value = ValidationResult()
     validator_class = Mock(return_value=validator)
@@ -270,6 +330,11 @@ def test_service_validate_published_version_delegates_to_post_publish_validator(
 
 
 def test_service_rebuild_reporting_views_delegates_to_view_builder(monkeypatch):
+    """
+    What: Delegates reporting-view rebuilds to the view builder with the expected view names.
+    Why: Published reporting surfaces should be rebuilt through one consistent builder interface.
+    Fails when: The service stops forwarding the configured view names or returning the builder result.
+    """
     builder = Mock()
     builder.rebuild_all.return_value = {"reporting_view": "vw_hierarchy_published_leaves"}
     builder_class = Mock(return_value=builder)
@@ -302,6 +367,11 @@ def test_service_rebuild_reporting_views_delegates_to_view_builder(monkeypatch):
 
 
 def test_service_retire_and_rebuild_reporting_views_runs_retire_then_rebuild():
+    """
+    What: Runs retirement before rebuilding reporting views in the composite retirement workflow.
+    Why: Published views should only rebuild after the underlying lifecycle state has been updated.
+    Fails when: The service changes the retire-then-rebuild order or drops either step from the composite flow.
+    """
     service = HierarchyService()
     service.retire_version = Mock()
     service.rebuild_reporting_views = Mock(return_value={"reporting_view": "dim"})
@@ -344,6 +414,11 @@ def test_service_retire_and_rebuild_reporting_views_runs_retire_then_rebuild():
 
 
 def test_service_publish_and_rebuild_reporting_views_runs_publish_then_rebuild():
+    """
+    What: Runs publish before rebuilding reporting views in the composite publish workflow.
+    Why: Published reporting surfaces should reflect the newly persisted version and node rows immediately after publish.
+    Fails when: The composite publish flow changes ordering or stops forwarding default append semantics.
+    """
     service = HierarchyService()
     service.publish_to_tables = Mock()
     service.rebuild_reporting_views = Mock(return_value={"reporting_view": "dim"})
@@ -387,6 +462,11 @@ def test_service_publish_and_rebuild_reporting_views_runs_publish_then_rebuild()
 
 
 def test_service_validate_published_version_strict_raises_on_audit_failures(monkeypatch):
+    """
+    What: Raises when a post-publish audit result contains blocking issues.
+    Why: Strict validation helpers are meant for release gates and should fail closed on persisted-state defects.
+    Fails when: Audit failures stop escalating to `HierarchyValidationError`.
+    """
     failed_result = ValidationResult()
     failed_result.add_issue("ERROR", "audit", "failed")
     failed_result.finalize()
@@ -402,3 +482,4 @@ def test_service_validate_published_version_strict_raises_on_audit_failures(monk
             node_table="nodes",
             version_table="versions",
         )
+

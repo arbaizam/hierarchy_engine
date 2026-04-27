@@ -152,8 +152,8 @@ Expected columns:
 - `parent_account_key`
 - `account_level`
 - `node_path`
-- `created_date`
-- `updated_date`
+- `created_at`
+- `updated_at`
 
 ### Reporting Views
 
@@ -183,6 +183,7 @@ Recommended operating rules:
 - do not reuse an existing `(hierarchy_id, version)`
 - retire a published version explicitly when replacing it
 - treat one published version per hierarchy as the normal operating model
+- do not run concurrent publish operations for the same `hierarchy_id`
 
 ## Validation Strategy
 
@@ -413,6 +414,21 @@ service.publish_to_tables(
 5. authoritative version-row write
 6. derived node-row write
 
+### Recover from a Partial Publish
+
+`publish_to_tables(...)` is not yet transactional across `hierarchy_versions` and `base_hierarchy_node`.
+
+If the version-row write succeeds and the node-row write fails, later publishes can be blocked by the existing `published` version row even though the node rows were never materialized.
+
+Current recovery path:
+
+1. inspect the authoritative row in `hierarchy_versions`
+2. retire the orphaned published version with `retire_version(...)`
+3. rebuild reporting views if they were already materialized
+4. re-run the publish
+
+This is an operator recovery procedure, not the target end state. Transactional publish remains the intended future design once Databricks environment support is confirmed.
+
 ### Publish and Rebuild Reporting Views
 
 ```python
@@ -554,7 +570,8 @@ python -m pytest tests --cov=hierarchy_engine --cov-report=term-missing -p no:ca
 - Publish remains append-oriented rather than fully transactional.
 - Retirement currently updates the authoritative version row only; derived node rows remain historical.
 - The loader still tolerates the legacy wrapped YAML shape during transition.
-- The notebook [hierarchy_engine_engineer_demo.ipynb](C:\Users\aarba\pydev\hierarchy_engine\examples\hierarchy_engine_engineer_demo.ipynb) has not yet been rewritten to match the refactored architecture.
+- Only the `vw_hierarchy_published_*` views are lifecycle-filtered; intermediate path, flat, and dimension views include all persisted versions.
+- Publish operations for the same `hierarchy_id` should be treated as serialized work until transactional publish is implemented.
 - There is not yet a CLI entry point or API layer.
 
 ## Summary

@@ -37,6 +37,11 @@ class FakeSpark:
 
 
 def test_post_publish_validator_accepts_clean_persisted_state():
+    """
+    What: Accepts a published persistence state with unique node rows, valid parents, and one published version.
+    Why: Post-publish audit should confirm a healthy write without inventing drift where none exists.
+    Fails when: Clean persisted versions start producing duplicate, parent, or lifecycle audit issues.
+    """
     spark = FakeSpark(
         {
             "SELECT account_key, COUNT(*) AS row_count": [],
@@ -56,6 +61,11 @@ def test_post_publish_validator_accepts_clean_persisted_state():
 
 
 def test_post_publish_validator_reports_all_supported_issue_types():
+    """
+    What: Reports duplicate node rows, missing parents, and multiple published versions in one audit pass.
+    Why: The persisted-state validator should surface every supported structural and lifecycle defect together.
+    Fails when: Any supported post-publish issue type stops being detected or is masked by earlier checks.
+    """
     spark = FakeSpark(
         {
             "SELECT account_key, COUNT(*) AS row_count": [
@@ -86,6 +96,11 @@ def test_post_publish_validator_reports_all_supported_issue_types():
 
 
 def test_post_publish_validator_rejects_invalid_table_identifier():
+    """
+    What: Rejects invalid version-table identifiers before the post-publish audit runs.
+    Why: Audit queries are string-built and should fail safely at identifier validation time.
+    Fails when: Unsafe version table names reach the SQL layer unchecked.
+    """
     with pytest.raises(HierarchyValidationError, match="Invalid table identifier"):
         PostPublishHierarchyValidator(FakeSpark({})).validate_version(
             hierarchy_id="TEST",
@@ -93,3 +108,4 @@ def test_post_publish_validator_rejects_invalid_table_identifier():
             node_table="nodes",
             version_table="bad table",
         )
+

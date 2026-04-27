@@ -1,21 +1,11 @@
 """
 Recursive hierarchy flattener.
-
-This module converts a nested hierarchy tree into adjacency-list rows better
-for storage in relational tables.
-
-The YAML hierarchy is naturally tree-shaped. Recursion is the cleanest way to
-visit the current node, emit its contents, descend into children, and broadcast
-parent context and path information to children.  
-
-Please ensure changes to this module are clearly and robust commented.  The 
-recursive traversal within this module is fundamental to the project.  
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import date
+from datetime import datetime, timezone
 
 from hierarchy_engine.models import (
     FlattenedHierarchyRow,
@@ -33,8 +23,8 @@ class HierarchyFlattener:
     def flatten(
         self,
         definition: HierarchyDefinition,
-        created_date: date | None = None,
-        updated_date: date | None = None,
+        created_at: str | None = None,
+        updated_at: str | None = None,
     ) -> list[FlattenedHierarchyRow]:
         """
         Flatten a full hierarchy definition into row objects.
@@ -43,6 +33,10 @@ class HierarchyFlattener:
         ----------
         definition : HierarchyDefinition
             Hierarchy definition to flatten.
+        created_at : str | None, default None
+            ISO-8601 timestamp applied to emitted row creation metadata.
+        updated_at : str | None, default None
+            ISO-8601 timestamp applied to emitted row update metadata.
 
         Returns
         -------
@@ -50,8 +44,8 @@ class HierarchyFlattener:
             Flattened adjacency-list rows.
         """
         rows: list[FlattenedHierarchyRow] = []
-        row_created_date = created_date or date.today()
-        row_updated_date = updated_date or row_created_date
+        row_created_at = created_at or self._utc_now()
+        row_updated_at = updated_at or row_created_at
         visited_nodes: set[int] = set()
 
         for root_node in definition.nodes:
@@ -62,8 +56,8 @@ class HierarchyFlattener:
                 account_level=1,
                 path_keys=[],
                 rows=rows,
-                created_date=row_created_date,
-                updated_date=row_updated_date,
+                created_at=row_created_at,
+                updated_at=row_updated_at,
                 visited_nodes=visited_nodes,
             )
 
@@ -77,8 +71,8 @@ class HierarchyFlattener:
         account_level: int,
         path_keys: list[str],
         rows: list[FlattenedHierarchyRow],
-        created_date: date,
-        updated_date: date,
+        created_at: str,
+        updated_at: str,
         visited_nodes: set[int],
     ) -> None:
         """
@@ -98,26 +92,12 @@ class HierarchyFlattener:
             Path of ancestor keys from the root down to the parent.
         rows : list[FlattenedHierarchyRow]
             Mutable output accumulator.
-        created_date : date
-            Creation date used for emitted rows.
-        updated_date : date
-            Update date used for emitted rows.
-
-        Notes
-        -----
-        Recursive traversal logic:
-
-        Base action:
-            Emit one row for the current node.
-
-        Recursive step:
-            For each child:
-            - current node's account_key becomes child's parent_account_key
-            - depth increases by 1
-            - path extends with current node's account_key
-
-        Termination:
-            Recursion stops naturally when a node has no children.
+        created_at : str
+            ISO-8601 timestamp used for emitted rows.
+        updated_at : str
+            ISO-8601 timestamp used for emitted rows.
+        visited_nodes : set[int]
+            Object-identity guard to prevent infinite recursion on cycles.
         """
         node_id = id(node)
         if node_id in visited_nodes:
@@ -135,12 +115,11 @@ class HierarchyFlattener:
                 parent_account_key=parent_account_key,
                 account_level=account_level,
                 node_path="||".join(current_path),
-                created_date=created_date,
-                updated_date=updated_date,
+                created_at=created_at,
+                updated_at=updated_at,
             )
         )
 
-        # Recurse into children, passing the current node as the parent context.
         for child in node.children or []:
             self._flatten_node(
                 node=child,
@@ -149,23 +128,19 @@ class HierarchyFlattener:
                 account_level=account_level + 1,
                 path_keys=current_path,
                 rows=rows,
-                created_date=created_date,
-                updated_date=updated_date,
+                created_at=created_at,
+                updated_at=updated_at,
                 visited_nodes=visited_nodes,
             )
 
     def to_dicts(self, rows: list[FlattenedHierarchyRow]) -> list[dict]:
         """
         Convert flattened rows to dictionaries.
-
-        Parameters
-        ----------
-        rows : list[FlattenedHierarchyRow]
-            Flattened row objects.
-
-        Returns
-        -------
-        list[dict]
-            Row dictionaries suitable for DataFrame creation.
         """
         return [asdict(row) for row in rows]
+
+    def _utc_now(self) -> str:
+        """
+        Return the current UTC timestamp in ISO-8601 string form.
+        """
+        return datetime.now(timezone.utc).isoformat()

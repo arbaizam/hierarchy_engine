@@ -17,7 +17,7 @@ It coordinates:
  
 from __future__ import annotations
  
-from datetime import date
+from datetime import datetime, timezone
 import logging
 from pathlib import Path
 
@@ -395,11 +395,14 @@ class HierarchyService:
             node_table,
         )
         self.validate_definition(definition)
-        system_date = date.today()
+        # Keep authoritative and derived row timestamps aligned to one persisted
+        # publish instant so audit and comparison logic can reason about them
+        # consistently.
+        persisted_at = published_at or self._utc_now()
         rows = self.flattener.flatten(
             definition=definition,
-            created_date=system_date,
-            updated_date=system_date,
+            created_at=persisted_at,
+            updated_at=persisted_at,
         )
         self.validate_post_structural(definition, rows=rows)
         self.validate_pre_publish(
@@ -424,7 +427,7 @@ class HierarchyService:
             table_name=version_table,
             status="published",
             published_by=published_by,
-            published_at=published_at,
+            published_at=persisted_at,
         )
  
         logger.info(
@@ -807,3 +810,9 @@ class HierarchyService:
             Output file path.
         """
         self.exporter.write_yaml(definition, path)
+
+    def _utc_now(self) -> str:
+        """
+        Return the current UTC timestamp in ISO-8601 string form.
+        """
+        return datetime.now(timezone.utc).isoformat()

@@ -1,28 +1,16 @@
 """
-Persistence helpers for hierarchy publishing.
-
-The authoritative persisted artifact is one hierarchy-version row containing
-the canonical payload JSON plus a small set of queryable metadata columns.
-Flattened node rows remain useful for recursive SQL and reporting views, but
-they are derived from the authoritative version payload rather than acting as
-the primary source of truth.
+Spark repository for hierarchy version metadata and derived node rows.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 import logging
 from typing import Optional
 
 from pyspark.sql import SparkSession
-from pyspark.sql.types import (
-    DateType,
-    IntegerType,
-    StringType,
-    StructField,
-    StructType,
-)
+from pyspark.sql.types import IntegerType, StringType, StructField, StructType
 
 from hierarchy_engine.errors import HierarchyValidationError
 from hierarchy_engine.models import HierarchyDefinition
@@ -35,14 +23,17 @@ logger = logging.getLogger(__name__)
 
 class HierarchyRepository:
     """
-    Repository for writing hierarchy objects to Spark tables.
+    Spark-backed repository for hierarchy metadata tables.
     """
 
     def __init__(
         self,
         spark: SparkSession,
         serializer: HierarchyVersionSerializer | None = None,
-    ):
+    ) -> None:
+        """
+        Create a Spark repository for hierarchy metadata tables.
+        """
         self.spark = spark
         self.serializer = serializer or HierarchyVersionSerializer()
 
@@ -166,8 +157,8 @@ class HierarchyRepository:
                 StructField("parent_account_key", StringType(), True),
                 StructField("account_level", IntegerType(), False),
                 StructField("node_path", StringType(), False),
-                StructField("created_date", DateType(), True),
-                StructField("updated_date", DateType(), True),
+                StructField("created_at", StringType(), True),
+                StructField("updated_at", StringType(), True),
             ]
         )
 

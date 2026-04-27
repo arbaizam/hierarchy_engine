@@ -169,7 +169,14 @@ class HierarchyViewBuilder:
         SELECT
             {select_clause}
         FROM {paths_view} p
-        LEFT JOIN {node_table} child
+        LEFT JOIN (
+            SELECT DISTINCT
+                hierarchy_id,
+                version,
+                parent_account_key
+            FROM {node_table}
+            WHERE parent_account_key IS NOT NULL
+        ) child
           ON p.hierarchy_id = child.hierarchy_id
          AND p.version = child.version
          AND p.account_key = child.parent_account_key
@@ -213,8 +220,8 @@ class HierarchyViewBuilder:
             "f.root_account_name",
             "f.path_keys", #3-21-26
             "f.path_names", #3-21-26
-            "array_join(f.path_keys, '|') AS path_key_path",  #3-21-26
-            "array_join(f.path_names, '|') AS path_name_path", #3-21-26
+            "array_join(f.path_keys, '||') AS path_key_path",  #3-21-26
+            "array_join(f.path_names, '||') AS path_name_path", #3-21-26
         ]
 
         for idx in range(max_depth):
@@ -277,8 +284,8 @@ class HierarchyViewBuilder:
             "f.derived_is_leaf",
             "f.path_keys", #3-21-26
             "f.path_names", #3-21-26
-            "array_join(f.path_keys, '|') AS path_key_path",  #3-21-26
-            "array_join(f.path_names, '|') AS path_name_path", #3-21-26
+            "array_join(f.path_keys, '||') AS path_key_path",  #3-21-26
+            "array_join(f.path_names, '||') AS path_name_path", #3-21-26
         ]
 
         for idx in range(max_depth):

@@ -5,6 +5,11 @@ from tests.helpers import build_definition
 
 
 def test_serializer_writes_canonical_payload_json():
+    """
+    What: Serializes a published hierarchy version row with canonical payload JSON and persisted metadata.
+    Why: The authoritative version row has to capture both queryable columns and the exact reconstructable payload.
+    Fails when: Payload JSON drops hierarchy fields, lifecycle metadata is wrong, or child nodes stop serializing.
+    """
     definition = build_definition()
 
     row = HierarchyVersionSerializer().serialize_version(
@@ -24,6 +29,11 @@ def test_serializer_writes_canonical_payload_json():
 
 
 def test_serializer_round_trips_definition():
+    """
+    What: Reconstructs a hierarchy definition from a serialized version row.
+    Why: `payload_json` is intended to be the authoritative source for rebuild and recovery workflows.
+    Fails when: Deserialization loses metadata, child structure, or the exporter/serializer payload contracts diverge.
+    """
     definition = build_definition()
     serializer = HierarchyVersionSerializer()
 
@@ -37,6 +47,11 @@ def test_serializer_round_trips_definition():
 
 
 def test_serializer_computes_summary_metrics():
+    """
+    What: Computes node count, leaf count, max depth, and content hash during version serialization.
+    Why: Persisted summary metrics support quick inspection and downstream validation without re-flattening the payload.
+    Fails when: Hierarchy statistics drift from the canonical payload or the content hash stops being generated.
+    """
     row = HierarchyVersionSerializer().serialize_version(
         build_definition(),
         status="published",
@@ -46,3 +61,4 @@ def test_serializer_computes_summary_metrics():
     assert row.leaf_count == 1
     assert row.max_depth == 2
     assert len(row.content_hash) == 64
+
