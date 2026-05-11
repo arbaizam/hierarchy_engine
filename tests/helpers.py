@@ -1,5 +1,3 @@
-from datetime import date
-
 from hierarchy_engine.models import HierarchyDefinition, HierarchyMetadata, HierarchyNode
 
 
@@ -26,13 +24,10 @@ def build_definition(
     metadata_data = {
         "hierarchy_id": "TEST",
         "hierarchy_name": "Test Hierarchy",
-        "hierarchy_description": "Test description",
-        "owner_team": "Finance",
-        "business_domain": "ALM",
-        "version_id": "V1",
-        "version_name": "Version 1",
-        "version_status": "draft",
-        "effective_start_date": date(2026, 1, 1),
+        "version": "V1",
+        "owner": "Finance",
+        "owner_department": "ALM",
+        "description": "Test description",
     }
     metadata_data.update(metadata_overrides)
 

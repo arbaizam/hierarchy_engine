@@ -17,7 +17,7 @@ It coordinates:
  
 from __future__ import annotations
  
-from datetime import date
+from datetime import datetime, timezone
 import logging
 from pathlib import Path
 
@@ -118,9 +118,9 @@ class HierarchyService:
             Structured validation result.
         """
         logger.info(
-            "Running pre-structural validation for hierarchy_id=%s version_id=%s",
+            "Running pre-structural validation for hierarchy_id=%s version=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
+            definition.metadata.version,
         )
         return self.validator.validate(definition)
  
@@ -172,9 +172,9 @@ class HierarchyService:
             Flattened rows.
         """
         logger.info(
-            "Flattening hierarchy definition for hierarchy_id=%s version_id=%s",
+            "Flattening hierarchy definition for hierarchy_id=%s version=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
+            definition.metadata.version,
         )
         return self.flattener.flatten(definition)
  
@@ -202,7 +202,6 @@ class HierarchyService:
     def create_base_tables(
         self,
         spark,
-        registry_table: str,
         version_table: str,
         node_table: str,
         mode: str = "errorifexists",
@@ -211,15 +210,13 @@ class HierarchyService:
         Create the empty base Spark tables required by the publish workflow.
         """
         logger.info(
-            "Creating base hierarchy tables: registry=%s version=%s node=%s mode=%s",
-            registry_table,
+            "Creating base hierarchy tables: version=%s node=%s mode=%s",
             version_table,
             node_table,
             mode,
         )
         repo = HierarchyRepository(spark)
         repo.create_base_tables(
-            registry_table=registry_table,
             version_table=version_table,
             node_table=node_table,
             mode=mode,
@@ -242,9 +239,9 @@ class HierarchyService:
             Flattened hierarchy DataFrame.
         """
         logger.info(
-            "Converting flattened hierarchy to DataFrame for hierarchy_id=%s version_id=%s",
+            "Converting flattened hierarchy to DataFrame for hierarchy_id=%s version=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
+            definition.metadata.version,
         )
         rows = self.flatten_to_dicts(definition)
         repo = HierarchyRepository(spark)
@@ -263,9 +260,9 @@ class HierarchyService:
         Validate the flattened hierarchy artifact before persistence.
         """
         logger.info(
-            "Running post-structural validation for hierarchy_id=%s version_id=%s",
+            "Running post-structural validation for hierarchy_id=%s version=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
+            definition.metadata.version,
         )
         rows = rows if rows is not None else self.flatten_definition(definition)
         validator = PostStructuralHierarchyValidator()
@@ -296,7 +293,6 @@ class HierarchyService:
         self,
         definition,
         spark,
-        registry_table: str,
         version_table: str,
         node_table: str,
     ) -> ValidationResult:
@@ -304,26 +300,23 @@ class HierarchyService:
         Validate a candidate publish against persisted tables before writing.
         """
         logger.info(
-            "Running pre-publish validation for hierarchy_id=%s version_id=%s against registry=%s version=%s node=%s",
+            "Running pre-publish validation for hierarchy_id=%s version=%s against version=%s node=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
-            registry_table,
+            definition.metadata.version,
             version_table,
             node_table,
         )
         validator = PrePublishHierarchyValidator(spark)
         return validator.validate_publish(
             metadata=definition.metadata,
-            registry_table=registry_table,
-            node_table=node_table,
             version_table=version_table,
+            node_table=node_table,
         )
 
     def validate_pre_publish(
         self,
         definition,
         spark,
-        registry_table: str,
         version_table: str,
         node_table: str,
     ) -> ValidationResult:
@@ -333,7 +326,6 @@ class HierarchyService:
         result = self.get_pre_publish_validation_result(
             definition=definition,
             spark=spark,
-            registry_table=registry_table,
             version_table=version_table,
             node_table=node_table,
         )
@@ -354,14 +346,13 @@ class HierarchyService:
         self,
         definition,
         spark,
-        registry_table: str,
         version_table: str,
         node_table: str,
         node_write_mode: str = "append",
-        publish_date: date | None = None,
-        created_by: str | None = None,
         published_by: str | None = None,
-        change_description: str | None = None,
+        published_at: str | None = None,
+        effective_start_date: str | None = None,
+        effective_end_date: str | None = None,
     ) -> None:
         """
         Publish a hierarchy definition to target Spark tables.
@@ -372,22 +363,20 @@ class HierarchyService:
             Hierarchy definition to publish.
         spark : SparkSession
             Active Spark session.
-        registry_table : str
-            Target hierarchy registry table.
         version_table : str
-            Target hierarchy version table.
+            Target authoritative hierarchy version table.
         node_table : str
             Target base hierarchy node table.
         node_write_mode : str, default "append"
             Write mode for node rows.
-        publish_date : date, optional
-            Publish date for the version. Defaults to current date.
-        created_by : str, optional
-            User who created the hierarchy. Defaults to current user.
         published_by : str, optional
-            User who published the hierarchy. Defaults to current user.
-        change_description : str, optional
-            Description of the change. Defaults to "Initial publish"
+            User or process that published the hierarchy.
+        published_at : str, optional
+            Explicit publish timestamp. Defaults to repository current UTC time.
+        effective_start_date : str, optional
+            Effective date for the version. Defaults to the publish date.
+        effective_end_date : str, optional
+            Effective end date for the version. Defaults to 2999-12-31.
  
         Raises
         ------
@@ -403,27 +392,33 @@ class HierarchyService:
 
         Optional post-publish validation remains available separately through
         `validate_published_version(...)` for audit or diagnostics use cases.
+
+        This workspace does not support atomic multi-table transactions. The
+        service therefore writes derived node rows first and the authoritative
+        version row second so a failure does not leave a published version row
+        with no node rows behind it.
         """
         logger.info(
-            "Publishing hierarchy_id=%s version_id=%s to registry=%s version=%s node=%s",
+            "Publishing hierarchy_id=%s version=%s to version=%s node=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
-            registry_table,
+            definition.metadata.version,
             version_table,
             node_table,
         )
         self.validate_definition(definition)
-        system_date = publish_date or date.today()
+        # Keep authoritative and derived row timestamps aligned to one persisted
+        # publish instant so audit and comparison logic can reason about them
+        # consistently.
+        persisted_at = published_at or self._utc_now()
         rows = self.flattener.flatten(
             definition=definition,
-            created_date=system_date,
-            updated_date=system_date,
+            created_at=persisted_at,
+            updated_at=persisted_at,
         )
         self.validate_post_structural(definition, rows=rows)
         self.validate_pre_publish(
             definition=definition,
             spark=spark,
-            registry_table=registry_table,
             version_table=version_table,
             node_table=node_table,
         )
@@ -431,57 +426,11 @@ class HierarchyService:
  
         repo = HierarchyRepository(spark)
         rows_df = repo.rows_to_dataframe(row_dicts)
- 
-        if not repo.registry_entry_exists(
-            table_name=registry_table,
-            hierarchy_id=definition.metadata.hierarchy_id,
-        ):
-            logger.info(
-                "Writing new registry entry for hierarchy_id=%s to %s",
-                definition.metadata.hierarchy_id,
-                registry_table,
-            )
-            repo.write_registry(
-                metadata=definition.metadata,
-                table_name=registry_table,
-                created_date=system_date,
-                updated_date=system_date,
-            )
-        else:
-            logger.info(
-                "Registry entry already exists for hierarchy_id=%s in %s; skipping registry write",
-                definition.metadata.hierarchy_id,
-                registry_table,
-            )
- 
+
         logger.info(
-            "Writing version row for hierarchy_id=%s version_id=%s to %s",
+            "Writing node rows for hierarchy_id=%s version=%s to %s with mode=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
-            version_table,
-        )
-        repo.write_version(
-            metadata=definition.metadata,
-            table_name=version_table,
-            created_date=system_date,
-            created_by=created_by,
-            published_date=(
-                system_date
-                if definition.metadata.version_status == "published"
-                else None
-            ),
-            published_by=(
-                published_by
-                if definition.metadata.version_status == "published"
-                else None
-            ),
-            change_description=change_description,
-        )
- 
-        logger.info(
-            "Writing node rows for hierarchy_id=%s version_id=%s to %s with mode=%s",
-            definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
+            definition.metadata.version,
             node_table,
             node_write_mode,
         )
@@ -490,7 +439,98 @@ class HierarchyService:
             table_name=node_table,
             mode=node_write_mode,
         )
+
+        logger.info(
+            "Writing authoritative version row for hierarchy_id=%s version=%s to %s",
+            definition.metadata.hierarchy_id,
+            definition.metadata.version,
+            version_table,
+        )
+        repo.write_version(
+            definition=definition,
+            table_name=version_table,
+            status="published",
+            published_by=published_by,
+            published_at=persisted_at,
+            effective_start_date=effective_start_date,
+            effective_end_date=effective_end_date,
+        )
  
+    def retire_version(
+        self,
+        spark,
+        version_table: str,
+        hierarchy_id: str,
+        version: str,
+        retired_by: str | None = None,
+        retired_at: str | None = None,
+        effective_end_date: str | None = None,
+    ) -> None:
+        """
+        Retire a persisted hierarchy version.
+        """
+        logger.info(
+            "Retiring hierarchy_id=%s version=%s in %s",
+            hierarchy_id,
+            version,
+            version_table,
+        )
+        repo = HierarchyRepository(spark)
+        repo.retire_version(
+            table_name=version_table,
+            hierarchy_id=hierarchy_id,
+            version=version,
+            retired_by=retired_by,
+            retired_at=retired_at,
+            effective_end_date=effective_end_date,
+        )
+
+    def retire_and_rebuild_reporting_views(
+        self,
+        spark,
+        version_table: str,
+        node_table: str,
+        hierarchy_id: str,
+        version: str,
+        paths_view: str,
+        flat_view: str,
+        dims_view: str,
+        reporting_view: str,
+        nodes_dims_view: str,
+        nodes_reporting_view: str,
+        retired_by: str | None = None,
+        retired_at: str | None = None,
+        effective_end_date: str | None = None,
+    ) -> dict[str, str]:
+        """
+        Retire a persisted hierarchy version, then rebuild reporting views.
+        """
+        logger.info(
+            "Retiring hierarchy_id=%s version=%s and rebuilding reporting views",
+            hierarchy_id,
+            version,
+        )
+        self.retire_version(
+            spark=spark,
+            version_table=version_table,
+            hierarchy_id=hierarchy_id,
+            version=version,
+            retired_by=retired_by,
+            retired_at=retired_at,
+            effective_end_date=effective_end_date,
+        )
+        return self.rebuild_reporting_views(
+            spark=spark,
+            version_table=version_table,
+            node_table=node_table,
+            paths_view=paths_view,
+            flat_view=flat_view,
+            dims_view=dims_view,
+            reporting_view=reporting_view,
+            nodes_dims_view=nodes_dims_view,
+            nodes_reporting_view=nodes_reporting_view,
+        )
+
     # -----------------------------------------------------------------------
     # Reporting view rebuilds
     # -----------------------------------------------------------------------
@@ -498,7 +538,6 @@ class HierarchyService:
     def rebuild_reporting_views(
         self,
         spark,
-        registry_table: str,
         version_table: str,
         node_table: str,
         paths_view: str,
@@ -517,8 +556,7 @@ class HierarchyService:
         reporting views for all published versions, not only the current one.
         """
         logger.info(
-            "Rebuilding reporting views from registry=%s version=%s node=%s into paths=%s flat=%s dims=%s reporting=%s nodes_dims=%s nodes_reporting=%s",
-            registry_table,
+            "Rebuilding reporting views from version=%s node=%s into paths=%s flat=%s dims=%s reporting=%s nodes_dims=%s nodes_reporting=%s",
             version_table,
             node_table,
             paths_view,
@@ -530,7 +568,6 @@ class HierarchyService:
         )
         builder = HierarchyViewBuilder(spark)
         return builder.rebuild_all(
-            registry_table=registry_table,
             version_table=version_table,
             node_table=node_table,
             paths_view=paths_view,
@@ -545,7 +582,6 @@ class HierarchyService:
         self,
         definition,
         spark,
-        registry_table: str,
         version_table: str,
         node_table: str,
         paths_view: str,
@@ -555,34 +591,28 @@ class HierarchyService:
         nodes_dims_view: str,
         nodes_reporting_view: str,
         node_write_mode: str = "append",
-        publish_date: date | None = None,
-        created_by: str | None = None,
         published_by: str | None = None,
-        change_description: str | None = None,
+        published_at: str | None = None,
     ) -> dict[str, str]:
         """
         Publish base tables, then rebuild all derived reporting views.
         """
         logger.info(
-            "Publishing and rebuilding reporting views for hierarchy_id=%s version_id=%s",
+            "Publishing and rebuilding reporting views for hierarchy_id=%s version=%s",
             definition.metadata.hierarchy_id,
-            definition.metadata.version_id,
+            definition.metadata.version,
         )
         self.publish_to_tables(
             definition=definition,
             spark=spark,
-            registry_table=registry_table,
             version_table=version_table,
             node_table=node_table,
             node_write_mode=node_write_mode,
-            publish_date=publish_date,
-            created_by=created_by,
             published_by=published_by,
-            change_description=change_description,
+            published_at=published_at,
         )
         return self.rebuild_reporting_views(
             spark=spark,
-            registry_table=registry_table,
             version_table=version_table,
             node_table=node_table,
             paths_view=paths_view,
@@ -601,7 +631,7 @@ class HierarchyService:
         self,
         spark,
         hierarchy_id: str,
-        version_id: str,
+        version: str,
         node_table: str,
         version_table: str,
     ) -> ValidationResult:
@@ -614,7 +644,7 @@ class HierarchyService:
             Active Spark session.
         hierarchy_id : str
             Hierarchy identifier to validate.
-        version_id : str
+        version : str
             Version identifier to validate.
         node_table : str
             Fully qualified flattened node table name.
@@ -638,16 +668,16 @@ class HierarchyService:
         drift, manual edits, partial writes, or legacy cleanup.
         """
         logger.info(
-            "Running post-publish audit validation for hierarchy_id=%s version_id=%s against node=%s version=%s",
+            "Running post-publish audit validation for hierarchy_id=%s version=%s against node=%s version_table=%s",
             hierarchy_id,
-            version_id,
+            version,
             node_table,
             version_table,
         )
         validator = PostPublishHierarchyValidator(spark)
         return validator.validate_version(
             hierarchy_id=hierarchy_id,
-            version_id=version_id,
+            version=version,
             node_table=node_table,
             version_table=version_table,
         )
@@ -656,7 +686,7 @@ class HierarchyService:
         self,
         spark,
         hierarchy_id: str,
-        version_id: str,
+        version: str,
         node_table: str,
         version_table: str,
     ) -> ValidationResult:
@@ -669,7 +699,7 @@ class HierarchyService:
             Active Spark session.
         hierarchy_id : str
             Hierarchy identifier to validate.
-        version_id : str
+        version : str
             Version identifier to validate.
         node_table : str
             Fully qualified flattened node table name.
@@ -689,7 +719,7 @@ class HierarchyService:
         result = self.validate_published_version(
             spark=spark,
             hierarchy_id=hierarchy_id,
-            version_id=version_id,
+            version=version,
             node_table=node_table,
             version_table=version_table,
         )
@@ -797,3 +827,9 @@ class HierarchyService:
             Output file path.
         """
         self.exporter.write_yaml(definition, path)
+
+    def _utc_now(self) -> str:
+        """
+        Return the current UTC timestamp in ISO-8601 string form.
+        """
+        return datetime.now(timezone.utc).isoformat()

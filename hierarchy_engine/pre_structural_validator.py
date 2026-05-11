@@ -51,8 +51,6 @@ is desired.
  
 from __future__ import annotations
  
-from datetime import date
-
 from hierarchy_engine.models import (
     HierarchyDefinition,
     HierarchyNode,
@@ -68,8 +66,6 @@ class HierarchyValidator:
     This validator is intentionally responsible only for object-level validation.
     It does not depend on Spark, SQL views, flattened rows, or persisted tables.
     """
- 
-    VALID_VERSION_STATUS = {"draft", "published", "retired"}
  
     def validate(self, definition: HierarchyDefinition) -> ValidationResult:
         """
@@ -154,69 +150,32 @@ class HierarchyValidator:
                 message="hierarchy_name must not be empty",
             )
  
-        if not meta.version_id:
+        if not meta.version:
             result.add_issue(
                 severity="ERROR",
-                check_name="missing_version_id",
-                message="version_id must not be empty",
+                check_name="missing_version",
+                message="version must not be empty",
             )
  
-        if not meta.version_name:
+        if not meta.description:
             result.add_issue(
                 severity="ERROR",
-                check_name="missing_version_name",
-                message="version_name must not be empty",
+                check_name="missing_description",
+                message="description is empty",
             )
  
-        if not meta.hierarchy_description:
+        if not meta.owner:
             result.add_issue(
                 severity="ERROR",
-                check_name="missing_hierarchy_description",
-                message="hierarchy_description is empty",
+                check_name="missing_owner",
+                message="owner is empty",
             )
  
-        if not meta.owner_team:
+        if not meta.owner_department:
             result.add_issue(
                 severity="ERROR",
-                check_name="missing_owner_team",
-                message="owner_team is empty",
-            )
- 
-        if not meta.business_domain:
-            result.add_issue(
-                severity="ERROR",
-                check_name="missing_business_domain",
-                message="business_domain is empty",
-            )
- 
-        if meta.version_status not in self.VALID_VERSION_STATUS:
-            result.add_issue(
-                severity="ERROR",
-                check_name="invalid_version_status",
-                message=f"version_status '{meta.version_status}' is invalid",
-                details={"allowed_values": sorted(self.VALID_VERSION_STATUS)},
-            )
- 
-        if meta.effective_start_date is None:
-            result.add_issue(
-                severity="ERROR",
-                check_name="missing_effective_start_date",
-                message="effective_start_date must not be null",
-            )
- 
-        if (
-            isinstance(meta.effective_start_date, date)
-            and isinstance(meta.effective_end_date, date)
-            and meta.effective_end_date < meta.effective_start_date
-        ):
-            result.add_issue(
-                severity="ERROR",
-                check_name="invalid_effective_date_range",
-                message="effective_end_date cannot be before effective_start_date",
-                details={
-                    "effective_start_date": meta.effective_start_date.isoformat(),
-                    "effective_end_date": meta.effective_end_date.isoformat(),
-                },
+                check_name="missing_owner_department",
+                message="owner_department is empty",
             )
  
     # -----------------------------------------------------------------------

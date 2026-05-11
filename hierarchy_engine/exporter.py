@@ -1,20 +1,10 @@
 """
-Hierarchy YAML export utilities.
-
-This module exports an in-memory hierarchy definition back to YAML.
-
-Why this matters
-----------------
-Export is useful for:
-
-- round-trip validation
-- regenerating authored files from in-memory objects
-- future "edit in UI, save to YAML" workflows
-- comparing canonical serialized versions in source control
+YAML exporter for canonical hierarchy metadata.
 """
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import yaml
@@ -24,114 +14,76 @@ from hierarchy_engine.models import HierarchyDefinition, HierarchyNode
 
 class HierarchyYamlExporter:
     """
-    Export hierarchy definitions to YAML.
+    Export hierarchy dataclasses into canonical YAML authoring payloads.
     """
 
-    def _serialize_date(self, value: Any) -> str | None:
-        """Serialize date-like values without requiring pre-validation."""
-        if value is None:
-            return None
-        if hasattr(value, "isoformat"):
-            return value.isoformat()
-        return str(value)
+    def export_payload(self, definition: HierarchyDefinition) -> dict[str, Any]:
+        """
+        Convert a hierarchy model into a YAML-safe dictionary.
+
+        Parameters
+        ----------
+        definition : HierarchyDefinition
+            Hierarchy metadata to export.
+
+        Returns
+        -------
+        dict[str, Any]
+            Canonical authoring payload suitable for ``yaml.safe_dump``.
+        """
+        meta = definition.metadata
+        return {
+            "hierarchy_id": meta.hierarchy_id,
+            "hierarchy_name": meta.hierarchy_name,
+            "version": meta.version,
+            "owner": meta.owner,
+            "owner_department": meta.owner_department,
+            "description": meta.description,
+            "nodes": [self._export_node(node) for node in definition.nodes],
+        }
 
     def to_dict(self, definition: HierarchyDefinition) -> dict[str, Any]:
         """
-        Convert a hierarchy definition to a YAML-friendly dictionary.
-
-        Parameters
-        ----------
-        definition : HierarchyDefinition
-            Hierarchy definition to serialize.
-
-        Returns
-        -------
-        dict[str, Any]
-            YAML-friendly dictionary representation.
+        Return the canonical authoring payload.
         """
-        meta = definition.metadata
+        return self.export_payload(definition)
 
-        return {
-            "hierarchy": {
-                "hierarchy_id": meta.hierarchy_id,
-                "hierarchy_name": meta.hierarchy_name,
-                "hierarchy_description": meta.hierarchy_description,
-                "owner_team": meta.owner_team,
-                "business_domain": meta.business_domain,
-                "version_id": meta.version_id,
-                "version_name": meta.version_name,
-                "version_status": meta.version_status,
-                "effective_start_date": self._serialize_date(
-                    meta.effective_start_date
-                ),
-                "effective_end_date": self._serialize_date(meta.effective_end_date),
-                "nodes": [self._node_to_dict(node) for node in definition.nodes],
-            }
-        }
-
-    def _node_to_dict(self, node: HierarchyNode) -> dict[str, Any]:
+    def export_text(self, definition: HierarchyDefinition) -> str:
         """
-        Recursively convert a hierarchy node to a dictionary.
-
-        Parameters
-        ----------
-        node : HierarchyNode
-            Node to convert.
-
-        Returns
-        -------
-        dict[str, Any]
-            Dictionary representation of the node.
-
-        Notes
-        -----
-        Recursion mirrors the tree structure:
-        each node is converted, then its children are converted in turn.
+        Render a hierarchy model as YAML text.
         """
-        node_dict: dict[str, Any] = {
-            "account_key": node.account_key,
-            "account_name": node.account_name,
-        }
-
-        if node.children:
-            node_dict["children"] = [
-                self._node_to_dict(child) for child in node.children
-            ]
-
-        return node_dict
-
-    def to_yaml(self, definition: HierarchyDefinition) -> str:
-        """
-        Serialize a hierarchy definition to YAML text.
-
-        Parameters
-        ----------
-        definition : HierarchyDefinition
-            Hierarchy definition to serialize.
-
-        Returns
-        -------
-        str
-            YAML string.
-        """
-        payload = self.to_dict(definition)
         return yaml.safe_dump(
-            payload,
+            self.export_payload(definition),
             sort_keys=False,
             allow_unicode=True,
         )
 
+    def to_yaml(self, definition: HierarchyDefinition) -> str:
+        """
+        Render a hierarchy model as YAML text.
+        """
+        return self.export_text(definition)
+
+    def export_path(self, definition: HierarchyDefinition, path: str | Path) -> None:
+        """
+        Write a hierarchy model to a YAML file.
+        """
+        Path(path).write_text(self.export_text(definition), encoding="utf-8")
+
     def write_yaml(self, definition: HierarchyDefinition, path: str) -> None:
         """
-        Write a hierarchy definition to a YAML file.
-
-        Parameters
-        ----------
-        definition : HierarchyDefinition
-            Hierarchy definition to serialize.
-        path : str
-            Target output file path.
+        Write a hierarchy model to a YAML file.
         """
-        yaml_text = self.to_yaml(definition)
-        with open(path, "w", encoding="utf-8") as handle:
-            handle.write(yaml_text)
+        self.export_path(definition, path)
+
+    def _export_node(self, node: HierarchyNode) -> dict[str, Any]:
+        """
+        Export one hierarchy node into canonical YAML node syntax.
+        """
+        payload: dict[str, Any] = {
+            "account_key": node.account_key,
+            "account_name": node.account_name,
+        }
+        if node.children:
+            payload["children"] = [self._export_node(child) for child in node.children]
+        return payload

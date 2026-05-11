@@ -43,7 +43,7 @@ class HierarchyTreeRenderer:
 
         header = (
             f"Hierarchy: {definition.metadata.hierarchy_id} | "
-            f"Version: {definition.metadata.version_id} | "
+            f"Version: {definition.metadata.version} | "
             f"Name: {definition.metadata.hierarchy_name}"
         )
         lines.append(header)

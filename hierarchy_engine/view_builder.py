@@ -27,6 +27,7 @@ import logging
 
 from pyspark.sql import SparkSession
 
+from hierarchy_engine.sql_identifiers import validate_sql_identifier
 
 logger = logging.getLogger(__name__)
 
@@ -54,13 +55,15 @@ class HierarchyViewBuilder:
         """
         Rebuild the recursive hierarchy path view.
         """
+        validate_sql_identifier(node_table, kind="table")
+        validate_sql_identifier(paths_view, kind="view")
         logger.info("Rebuilding hierarchy paths view: %s", paths_view)
         sql_stmt = f"""
         CREATE OR REPLACE VIEW {paths_view} AS
         WITH RECURSIVE hierarchy_cte AS (
             SELECT
                 n.hierarchy_id,
-                n.version_id,
+                n.version,
                 n.account_key,
                 n.account_name,
                 n.parent_account_key,
@@ -76,7 +79,7 @@ class HierarchyViewBuilder:
 
             SELECT
                 c.hierarchy_id,
-                c.version_id,
+                c.version,
                 c.account_key,
                 c.account_name,
                 c.parent_account_key,
@@ -88,13 +91,13 @@ class HierarchyViewBuilder:
             FROM {node_table} c
             JOIN hierarchy_cte p
               ON c.hierarchy_id = p.hierarchy_id
-             AND c.version_id = p.version_id
+             AND c.version = p.version
              AND c.parent_account_key = p.account_key
             WHERE NOT array_contains(p.path_keys, c.account_key)
         )
         SELECT
             hierarchy_id,
-            version_id,
+            version,
             account_key,
             account_name,
             parent_account_key,
@@ -121,12 +124,15 @@ class HierarchyViewBuilder:
         columns and a derived leaf flag. It remains structural and generic so
         downstream consumers can choose leaf-only or all-node projections.
         """
+        validate_sql_identifier(node_table, kind="table")
+        validate_sql_identifier(paths_view, kind="view")
+        validate_sql_identifier(flat_view, kind="view")
         logger.info("Rebuilding hierarchy flat view: %s", flat_view)
         max_depth = self.target_max_depth #self._get_max_depth(paths_view)
 
         select_cols = [
             "p.hierarchy_id",
-            "p.version_id",
+            "p.version",
             "p.account_key",
             "p.account_name",
             "p.parent_account_key",
@@ -163,9 +169,17 @@ class HierarchyViewBuilder:
         SELECT
             {select_clause}
         FROM {paths_view} p
-        LEFT JOIN {node_table} child
+        LEFT JOIN (
+            SELECT DISTINCT
+                hierarchy_id,
+                version,
+                account_key,
+                parent_account_key
+            FROM {node_table}
+            WHERE parent_account_key IS NOT NULL
+        ) child
           ON p.hierarchy_id = child.hierarchy_id
-         AND p.version_id = child.version_id
+         AND p.version = child.version
          AND p.account_key = child.parent_account_key
         """
         self.spark.sql(sql_stmt)
@@ -173,7 +187,6 @@ class HierarchyViewBuilder:
 
     def rebuild_leaf_dims_view(
         self,
-        registry_table: str,
         version_table: str,
         flat_view: str,
         dims_view: str,
@@ -183,34 +196,35 @@ class HierarchyViewBuilder:
 
         This view is intended for fact-to-leaf mapping scenarios.
         """
+        validate_sql_identifier(version_table, kind="table")
+        validate_sql_identifier(flat_view, kind="view")
+        validate_sql_identifier(dims_view, kind="view")
         logger.info("Rebuilding hierarchy leaf dims view: %s", dims_view)
         max_depth = self.target_max_depth  #self._get_max_depth(flat_view)
 
         select_cols = [
             "f.hierarchy_id",
-            "r.hierarchy_name",
-            "r.hierarchy_description",
-            "r.owner_team",
-            "r.business_domain",
-            "f.version_id",
-            "concat(f.hierarchy_id, '||', f.version_id) AS hier_ver_key",
-            "v.version_name",
-            "v.version_status",
+            "v.hierarchy_name",
+            "v.description",
+            "v.owner",
+            "v.owner_department",
+            "f.version",
+            "concat(f.hierarchy_id, '||', f.version) AS hier_ver_key",
+            "v.status",
             "v.effective_start_date",
             "v.effective_end_date",
-            "v.is_current",
             "f.account_key AS leaf_key",
             "f.account_name AS leaf_name",
             "concat(f.hierarchy_id, '||', f.account_key) AS hier_leaf_key",
-            "concat(f.hierarchy_id, '||', f.version_id, '||', f.account_key) "
+            "concat(f.hierarchy_id, '||', f.version, '||', f.account_key) "
             "AS hier_ver_leaf_key",
             "f.depth",
             "f.root_account_key",
             "f.root_account_name",
             "f.path_keys", #3-21-26
             "f.path_names", #3-21-26
-            "array_join(f.path_keys, '|') AS path_key_path",  #3-21-26
-            "array_join(f.path_names, '|') AS path_name_path", #3-21-26
+            "array_join(f.path_keys, '||') AS path_key_path",  #3-21-26
+            "array_join(f.path_names, '||') AS path_name_path", #3-21-26
         ]
 
         for idx in range(max_depth):
@@ -225,11 +239,9 @@ class HierarchyViewBuilder:
         SELECT
             {select_clause}
         FROM {flat_view} f
-        JOIN {registry_table} r
-          ON f.hierarchy_id = r.hierarchy_id
         JOIN {version_table} v
           ON f.hierarchy_id = v.hierarchy_id
-         AND f.version_id = v.version_id
+         AND f.version = v.version
         WHERE f.derived_is_leaf = TRUE
         """
         self.spark.sql(sql_stmt)
@@ -237,7 +249,6 @@ class HierarchyViewBuilder:
 
     def rebuild_nodes_dims_view(
         self,
-        registry_table: str,
         version_table: str,
         flat_view: str,
         nodes_dims_view: str,
@@ -249,27 +260,28 @@ class HierarchyViewBuilder:
         hierarchy tree, including non-leaf rows, such as semantic models,
         tree navigation, UI rendering, or downstream presentation logic.
         """
+        validate_sql_identifier(version_table, kind="table")
+        validate_sql_identifier(flat_view, kind="view")
+        validate_sql_identifier(nodes_dims_view, kind="view")
         logger.info("Rebuilding hierarchy nodes dims view: %s", nodes_dims_view)
         max_depth = self.target_max_depth #self._get_max_depth(flat_view)
 
         select_cols = [
             "f.hierarchy_id",
-            "r.hierarchy_name",
-            "r.hierarchy_description",
-            "r.owner_team",
-            "r.business_domain",
-            "f.version_id",
-            "concat(f.hierarchy_id, '||', f.version_id) AS hier_ver_key",
-            "v.version_name",
-            "v.version_status",
+            "v.hierarchy_name",
+            "v.description",
+            "v.owner",
+            "v.owner_department",
+            "f.version",
+            "concat(f.hierarchy_id, '||', f.version) AS hier_ver_key",
+            "v.status",
             "v.effective_start_date",
             "v.effective_end_date",
-            "v.is_current",
             "f.account_key AS node_key",
             "f.account_name AS node_name",
             "f.parent_account_key",
             "concat(f.hierarchy_id, '||', f.account_key) AS hier_node_key",
-            "concat(f.hierarchy_id, '||', f.version_id, '||', f.account_key) "
+            "concat(f.hierarchy_id, '||', f.version, '||', f.account_key) "
             "AS hier_ver_node_key",
             "f.depth",
             "f.root_account_key",
@@ -277,8 +289,8 @@ class HierarchyViewBuilder:
             "f.derived_is_leaf",
             "f.path_keys", #3-21-26
             "f.path_names", #3-21-26
-            "array_join(f.path_keys, '|') AS path_key_path",  #3-21-26
-            "array_join(f.path_names, '|') AS path_name_path", #3-21-26
+            "array_join(f.path_keys, '||') AS path_key_path",  #3-21-26
+            "array_join(f.path_names, '||') AS path_name_path", #3-21-26
         ]
 
         for idx in range(max_depth):
@@ -293,11 +305,9 @@ class HierarchyViewBuilder:
         SELECT
             {select_clause}
         FROM {flat_view} f
-        JOIN {registry_table} r
-          ON f.hierarchy_id = r.hierarchy_id
         JOIN {version_table} v
           ON f.hierarchy_id = v.hierarchy_id
-         AND f.version_id = v.version_id
+         AND f.version = v.version
         """
         self.spark.sql(sql_stmt)
         return nodes_dims_view
@@ -311,22 +321,22 @@ class HierarchyViewBuilder:
         """
         Rebuild the final leaf-level reporting view for all published versions.
         """
+        validate_sql_identifier(dims_view, kind="view")
+        validate_sql_identifier(reporting_view, kind="view")
         logger.info("Rebuilding hierarchy leaf reporting view: %s", reporting_view)
         max_depth = self.target_max_depth #self._get_max_depth(dims_view)
 
         publish_cols = [
             "hierarchy_id",
             "hierarchy_name",
-            "hierarchy_description",
-            "owner_team",
-            "business_domain",
-            "version_id",
+            "description",
+            "owner",
+            "owner_department",
+            "version",
             "hier_ver_key",
-            "version_name",
-            "version_status",
+            "status",
             "effective_start_date",
             "effective_end_date",
-            "is_current",
             "leaf_key",
             "leaf_name",
             "hier_leaf_key",
@@ -357,7 +367,7 @@ class HierarchyViewBuilder:
         SELECT
             {publish_clause}
         FROM {dims_view}
-        WHERE version_status = {published_status_literal}
+        WHERE status = {published_status_literal}
         """
         self.spark.sql(sql_stmt)
         return reporting_view
@@ -371,6 +381,8 @@ class HierarchyViewBuilder:
         """
         Rebuild the final all-nodes reporting view for all published versions.
         """
+        validate_sql_identifier(nodes_dims_view, kind="view")
+        validate_sql_identifier(nodes_reporting_view, kind="view")
         logger.info(
             "Rebuilding hierarchy nodes reporting view: %s",
             nodes_reporting_view,
@@ -380,16 +392,14 @@ class HierarchyViewBuilder:
         publish_cols = [
             "hierarchy_id",
             "hierarchy_name",
-            "hierarchy_description",
-            "owner_team",
-            "business_domain",
-            "version_id",
+            "description",
+            "owner",
+            "owner_department",
+            "version",
             "hier_ver_key",
-            "version_name",
-            "version_status",
+            "status",
             "effective_start_date",
             "effective_end_date",
-            "is_current",
             "node_key",
             "node_name",
             "parent_account_key",
@@ -399,6 +409,10 @@ class HierarchyViewBuilder:
             "root_account_key",
             "root_account_name",
             "derived_is_leaf",
+            "path_keys",
+            "path_names",
+            "path_key_path",
+            "path_name_path",
         ]
 
         for idx in range(max_depth):
@@ -418,14 +432,13 @@ class HierarchyViewBuilder:
         SELECT
             {publish_clause}
         FROM {nodes_dims_view}
-        WHERE version_status = {published_status_literal}
+        WHERE status = {published_status_literal}
         """
         self.spark.sql(sql_stmt)
         return nodes_reporting_view
 
     def rebuild_all(
         self,
-        registry_table: str,
         version_table: str,
         node_table: str,
         paths_view: str,
@@ -438,6 +451,14 @@ class HierarchyViewBuilder:
         """
         Rebuild the full hierarchy reporting view stack.
         """
+        validate_sql_identifier(version_table, kind="table")
+        validate_sql_identifier(node_table, kind="table")
+        validate_sql_identifier(paths_view, kind="view")
+        validate_sql_identifier(flat_view, kind="view")
+        validate_sql_identifier(dims_view, kind="view")
+        validate_sql_identifier(reporting_view, kind="view")
+        validate_sql_identifier(nodes_dims_view, kind="view")
+        validate_sql_identifier(nodes_reporting_view, kind="view")
         logger.info("Rebuilding full hierarchy reporting view stack")
 
         self.rebuild_paths_view(
@@ -450,7 +471,6 @@ class HierarchyViewBuilder:
             flat_view=flat_view,
         )
         self.rebuild_leaf_dims_view(
-            registry_table=registry_table,
             version_table=version_table,
             flat_view=flat_view,
             dims_view=dims_view,
@@ -460,7 +480,6 @@ class HierarchyViewBuilder:
             reporting_view=reporting_view,
         )
         self.rebuild_nodes_dims_view(
-            registry_table=registry_table,
             version_table=version_table,
             flat_view=flat_view,
             nodes_dims_view=nodes_dims_view,
@@ -480,6 +499,7 @@ class HierarchyViewBuilder:
         }
 
     def _get_max_depth(self, relation_name: str) -> int:
+        validate_sql_identifier(relation_name, kind="relation")
         row = self.spark.sql(
             f"""
             SELECT MAX(depth) AS max_depth

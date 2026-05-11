@@ -95,18 +95,18 @@ class PostStructuralHierarchyValidator:
                     },
                 )
 
-            if row.version_id != metadata.version_id:
+            if row.version != metadata.version:
                 result.add_issue(
                     severity="ERROR",
-                    check_name="mismatched_row_version_id",
+                    check_name="mismatched_row_version",
                     message=(
-                        f"Row '{row.account_key}' has version_id '{row.version_id}' "
-                        f"but expected '{metadata.version_id}'"
+                        f"Row '{row.account_key}' has version '{row.version}' "
+                        f"but expected '{metadata.version}'"
                     ),
                     details={
                         "account_key": row.account_key,
-                        "row_version_id": row.version_id,
-                        "expected_version_id": metadata.version_id,
+                        "row_version": row.version,
+                        "expected_version": metadata.version,
                     },
                 )
 

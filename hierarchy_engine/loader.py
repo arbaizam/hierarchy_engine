@@ -12,7 +12,6 @@ That responsibility is designated to the validator.
  
 from __future__ import annotations
  
-from datetime import date
 from pathlib import Path
 from typing import Any
  
@@ -64,10 +63,12 @@ class HierarchyConfigLoader:
         if not isinstance(raw, dict):
             raise HierarchyParseError("Root YAML object must be a dictionary")
  
-        if "hierarchy" not in raw:
-            raise HierarchyParseError("YAML must contain a top-level 'hierarchy' section")
- 
-        return self._parse_hierarchy(raw["hierarchy"])
+        if "hierarchy" in raw:
+            raise HierarchyParseError(
+                "Legacy top-level 'hierarchy' wrapper is no longer supported"
+            )
+
+        return self._parse_hierarchy(raw)
  
     def _add_issue(
         self,
@@ -92,53 +93,6 @@ class HierarchyConfigLoader:
             return ""
         return str(value)
  
-    def _parse_date(
-        self,
-        value: Any,
-        field_name: str,
-        issues: list[ValidationIssue],
-    ) -> date | None:
-        """
-        Parse an ISO date field from the YAML payload.
- 
-        Parameters
-        ----------
-        value : Any
-            Raw field value.
-        field_name : str
-            Field name used in parse errors.
- 
-        Returns
-        -------
-        date | None
-            Parsed date, or None for null values.
-        """
-        if value is None:
-            return None
- 
-        if isinstance(value, date):
-            return value
- 
-        if not isinstance(value, str):
-            self._add_issue(
-                issues,
-                f"invalid_{field_name}_type",
-                f"Field '{field_name}' must be an ISO date string or null",
-                details={"field_name": field_name, "value_type": type(value).__name__},
-            )
-            return None
- 
-        try:
-            return date.fromisoformat(value)
-        except ValueError:
-            self._add_issue(
-                issues,
-                f"invalid_{field_name}_format",
-                f"Field '{field_name}' must be a valid ISO date: {value}",
-                details={"field_name": field_name, "value": value},
-            )
-            return None
- 
     def _parse_hierarchy(self, raw: dict[str, Any]) -> HierarchyDefinition:
         """
         Parse the top-level hierarchy object.
@@ -154,7 +108,7 @@ class HierarchyConfigLoader:
             Parsed hierarchy definition.
         """
         if not isinstance(raw, dict):
-            raise HierarchyParseError("Top-level 'hierarchy' section must be a dictionary")
+            raise HierarchyParseError("Top-level hierarchy payload must be a dictionary")
  
         issues: list[ValidationIssue] = []
         raw_nodes = raw.get("nodes", [])
@@ -171,22 +125,10 @@ class HierarchyConfigLoader:
         metadata = HierarchyMetadata(
             hierarchy_id=self._string_or_empty(raw.get("hierarchy_id")),
             hierarchy_name=self._string_or_empty(raw.get("hierarchy_name")),
-            hierarchy_description=self._string_or_empty(raw.get("hierarchy_description")),
-            owner_team=self._string_or_empty(raw.get("owner_team")),
-            business_domain=self._string_or_empty(raw.get("business_domain")),
-            version_id=self._string_or_empty(raw.get("version_id")),
-            version_name=self._string_or_empty(raw.get("version_name")),
-            version_status=self._string_or_empty(raw.get("version_status")),
-            effective_start_date=self._parse_date(
-                raw.get("effective_start_date"),
-                "effective_start_date",
-                issues,
-            ),
-            effective_end_date=self._parse_date(
-                raw.get("effective_end_date"),
-                "effective_end_date",
-                issues,
-            ),
+            version=self._string_or_empty(raw.get("version")),
+            owner=self._string_or_empty(raw.get("owner")),
+            owner_department=self._string_or_empty(raw.get("owner_department")),
+            description=self._string_or_empty(raw.get("description")),
         )
  
         nodes = [self._parse_node(node, issues) for node in raw_nodes]
