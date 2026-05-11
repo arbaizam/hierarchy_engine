@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from datetime import date
 
 from hierarchy_engine.exporter import HierarchyYamlExporter
 from hierarchy_engine.models import (
@@ -21,6 +22,8 @@ class HierarchyVersionSerializer:
     Convert canonical hierarchy models to and from persisted version rows.
     """
 
+    DEFAULT_EFFECTIVE_END_DATE = "2999-12-31"
+
     def serialize_version(
         self,
         definition: HierarchyDefinition,
@@ -30,6 +33,8 @@ class HierarchyVersionSerializer:
         published_at: str | None = None,
         retired_by: str | None = None,
         retired_at: str | None = None,
+        effective_start_date: str | None = None,
+        effective_end_date: str | None = None,
     ) -> HierarchyVersionRow:
         """
         Serialize one hierarchy version to the authoritative row shape.
@@ -44,6 +49,9 @@ class HierarchyVersionSerializer:
             hierarchy_name=definition.metadata.hierarchy_name,
             version=definition.metadata.version,
             status=status,
+            effective_start_date=effective_start_date
+            or self._date_from_timestamp(published_at),
+            effective_end_date=effective_end_date or self.DEFAULT_EFFECTIVE_END_DATE,
             description=definition.metadata.description,
             payload_json=payload_json,
             content_hash=self.content_hash_from_payload_json(payload_json),
@@ -99,6 +107,14 @@ class HierarchyVersionSerializer:
         """
         payload = HierarchyYamlExporter().export_payload(definition)
         return json.dumps(payload, sort_keys=True, separators=(",", ":"))
+
+    def _date_from_timestamp(self, value: str | None) -> str:
+        """
+        Return a non-null effective date from a publish timestamp.
+        """
+        if value:
+            return value[:10]
+        return date.today().isoformat()
 
     def _count_nodes(self, nodes: list[HierarchyNode]) -> int:
         """

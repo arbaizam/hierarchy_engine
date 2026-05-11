@@ -128,6 +128,8 @@ class HierarchyRepository:
                 StructField("hierarchy_name", StringType(), False),
                 StructField("version", StringType(), False),
                 StructField("status", StringType(), False),
+                StructField("effective_start_date", StringType(), False),
+                StructField("effective_end_date", StringType(), False),
                 StructField("description", StringType(), True),
                 StructField("payload_json", StringType(), False),
                 StructField("content_hash", StringType(), False),
@@ -202,6 +204,8 @@ class HierarchyRepository:
         published_at: Optional[str] = None,
         retired_by: Optional[str] = None,
         retired_at: Optional[str] = None,
+        effective_start_date: Optional[str] = None,
+        effective_end_date: Optional[str] = None,
     ) -> None:
         """
         Append one authoritative hierarchy version record.
@@ -221,6 +225,8 @@ class HierarchyRepository:
             published_at=published_at or self._utc_now() if status == "published" else published_at,
             retired_by=retired_by,
             retired_at=retired_at,
+            effective_start_date=effective_start_date,
+            effective_end_date=effective_end_date,
         )
         df = self.spark.createDataFrame([asdict(row)], schema=self.version_schema)
         df.write.mode("append").saveAsTable(table_name)
@@ -233,6 +239,7 @@ class HierarchyRepository:
         *,
         retired_by: Optional[str] = None,
         retired_at: Optional[str] = None,
+        effective_end_date: Optional[str] = None,
     ) -> None:
         """
         Update one authoritative version row to retired status.
@@ -260,12 +267,18 @@ class HierarchyRepository:
                 f"Hierarchy '{hierarchy_id}' version '{version}' is not currently published"
             )
 
+        retirement_timestamp = retired_at or self._utc_now()
+        retirement_effective_end_date = (
+            effective_end_date or self._date_from_timestamp(retirement_timestamp)
+        )
+
         self.spark.sql(
             f"""
             UPDATE {table_name}
             SET status = 'retired',
                 retired_by = {self._sql_nullable(self._actor_or_system(retired_by))},
-                retired_at = {self._sql_nullable(retired_at or self._utc_now())}
+                retired_at = {self._sql_nullable(retirement_timestamp)},
+                effective_end_date = {self._sql_string_literal(retirement_effective_end_date)}
             WHERE hierarchy_id = {self._sql_string_literal(hierarchy_id)}
               AND version = {self._sql_string_literal(version)}
             """
@@ -290,3 +303,6 @@ class HierarchyRepository:
 
     def _sql_nullable(self, value: str | None) -> str:
         return "NULL" if value is None else self._sql_string_literal(value)
+
+    def _date_from_timestamp(self, value: str) -> str:
+        return value[:10]

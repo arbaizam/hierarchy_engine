@@ -105,6 +105,8 @@ def test_create_base_tables_creates_empty_tables_from_explicit_schemas():
     assert spark.created_frames[0].write.table_name == "version_table"
     assert spark.created_frames[1].write.table_name == "node_table"
     assert spark.created_frames[0].schema[2].name == "version"
+    assert spark.created_frames[0].schema[4].name == "effective_start_date"
+    assert spark.created_frames[0].schema[5].name == "effective_end_date"
     assert spark.created_frames[1].schema[2].name == "account_key"
 
 
@@ -127,6 +129,8 @@ def test_write_version_creates_append_table_payload():
     assert df.data[0]["hierarchy_id"] == "TEST"
     assert df.data[0]["version"] == "V1"
     assert df.data[0]["status"] == "published"
+    assert df.data[0]["effective_start_date"] == "2026-04-26"
+    assert df.data[0]["effective_end_date"] == "2999-12-31"
     assert df.data[0]["payload_json"]
     assert df.write.mode_value == "append"
     assert df.write.table_name == "version_table"
@@ -266,8 +270,35 @@ def test_retire_version_emits_update_statement():
 
     assert any("UPDATE version_table" in query for query in spark.queries)
     assert any("status = 'retired'" in query for query in spark.queries)
+    assert any("retired_at = '2026-04-26T12:00:00Z'" in query for query in spark.queries)
+    assert any("effective_end_date = '2026-04-26'" in query for query in spark.queries)
     assert any("WHERE hierarchy_id = 'TEST'" in query for query in spark.queries)
     assert any("AND version = 'V1'" in query for query in spark.queries)
+
+
+def test_retire_version_allows_explicit_effective_end_date():
+    """
+    What: Allows retirement callers to close the effective window independently from the audit timestamp.
+    Why: Some replacement workflows need end-of-business dating while preserving the exact retirement time.
+    Fails when: Explicit effective end dates are ignored during retirement.
+    """
+    spark = FakeSpark(
+        existing_tables={"version_table"},
+        sql_results={
+            "SELECT status": [FakeRow(status="published")],
+        },
+    )
+
+    HierarchyRepository(spark).retire_version(
+        "version_table",
+        "TEST",
+        "V1",
+        retired_by="engineer",
+        retired_at="2026-04-26T23:59:59Z",
+        effective_end_date="2026-04-25",
+    )
+
+    assert any("effective_end_date = '2026-04-25'" in query for query in spark.queries)
 
 
 def test_retire_version_raises_when_version_missing():

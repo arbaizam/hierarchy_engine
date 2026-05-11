@@ -171,6 +171,8 @@ def test_service_publish_to_tables_runs_all_validation_layers_before_writing(mon
         status="published",
         published_by="engineer",
         published_at="2026-04-26T12:00:00Z",
+        effective_start_date=None,
+        effective_end_date=None,
     )
 
 
@@ -287,6 +289,7 @@ def test_service_retire_version_delegates_to_repository(monkeypatch):
         version="V1",
         retired_by="engineer",
         retired_at="2026-04-26T12:00:00Z",
+        effective_end_date="2026-04-26",
     )
 
     repo_class.assert_called_once_with("spark")
@@ -296,6 +299,7 @@ def test_service_retire_version_delegates_to_repository(monkeypatch):
         version="V1",
         retired_by="engineer",
         retired_at="2026-04-26T12:00:00Z",
+        effective_end_date="2026-04-26",
     )
 
 
@@ -401,6 +405,7 @@ def test_service_retire_and_rebuild_reporting_views_runs_retire_then_rebuild():
         version="V1",
         retired_by="engineer",
         retired_at=None,
+        effective_end_date=None,
     )
     service.rebuild_reporting_views.assert_called_once_with(
         spark="spark",

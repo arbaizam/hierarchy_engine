@@ -123,6 +123,8 @@ def test_rebuild_leaf_reporting_view_filters_to_published_versions():
     assert "WHERE status = 'published'" in view_sql
     assert "leaf_key" in view_sql
     assert "hier_ver_key" in view_sql
+    assert "effective_start_date" in view_sql
+    assert "effective_end_date" in view_sql
     assert "path_key_path" in view_sql
     assert "path_name_path" in view_sql
 
@@ -146,6 +148,8 @@ def test_rebuild_nodes_reporting_view_filters_to_published_versions():
     assert "node_key" in view_sql
     assert "derived_is_leaf" in view_sql
     assert "hier_ver_key" in view_sql
+    assert "effective_start_date" in view_sql
+    assert "effective_end_date" in view_sql
     assert "path_key_path" in view_sql
     assert "path_name_path" in view_sql
 

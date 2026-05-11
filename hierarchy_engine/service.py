@@ -351,6 +351,8 @@ class HierarchyService:
         node_write_mode: str = "append",
         published_by: str | None = None,
         published_at: str | None = None,
+        effective_start_date: str | None = None,
+        effective_end_date: str | None = None,
     ) -> None:
         """
         Publish a hierarchy definition to target Spark tables.
@@ -371,6 +373,10 @@ class HierarchyService:
             User or process that published the hierarchy.
         published_at : str, optional
             Explicit publish timestamp. Defaults to repository current UTC time.
+        effective_start_date : str, optional
+            Effective date for the version. Defaults to the publish date.
+        effective_end_date : str, optional
+            Effective end date for the version. Defaults to 2999-12-31.
  
         Raises
         ------
@@ -446,6 +452,8 @@ class HierarchyService:
             status="published",
             published_by=published_by,
             published_at=persisted_at,
+            effective_start_date=effective_start_date,
+            effective_end_date=effective_end_date,
         )
  
     def retire_version(
@@ -456,6 +464,7 @@ class HierarchyService:
         version: str,
         retired_by: str | None = None,
         retired_at: str | None = None,
+        effective_end_date: str | None = None,
     ) -> None:
         """
         Retire a persisted hierarchy version.
@@ -473,6 +482,7 @@ class HierarchyService:
             version=version,
             retired_by=retired_by,
             retired_at=retired_at,
+            effective_end_date=effective_end_date,
         )
 
     def retire_and_rebuild_reporting_views(
@@ -490,6 +500,7 @@ class HierarchyService:
         nodes_reporting_view: str,
         retired_by: str | None = None,
         retired_at: str | None = None,
+        effective_end_date: str | None = None,
     ) -> dict[str, str]:
         """
         Retire a persisted hierarchy version, then rebuild reporting views.
@@ -506,6 +517,7 @@ class HierarchyService:
             version=version,
             retired_by=retired_by,
             retired_at=retired_at,
+            effective_end_date=effective_end_date,
         )
         return self.rebuild_reporting_views(
             spark=spark,

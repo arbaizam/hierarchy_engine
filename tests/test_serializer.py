@@ -23,6 +23,8 @@ def test_serializer_writes_canonical_payload_json():
     assert row.hierarchy_id == "TEST"
     assert row.version == "V1"
     assert row.status == "published"
+    assert row.effective_start_date == "2026-04-26"
+    assert row.effective_end_date == "2999-12-31"
     assert payload["hierarchy_id"] == "TEST"
     assert payload["version"] == "V1"
     assert payload["nodes"][0]["children"][0]["account_key"] == "10100"
@@ -61,4 +63,25 @@ def test_serializer_computes_summary_metrics():
     assert row.leaf_count == 1
     assert row.max_depth == 2
     assert len(row.content_hash) == 64
+
+
+def test_serializer_accepts_explicit_effective_dates():
+    """
+    What: Allows callers to override effective dates while still keeping them non-null.
+    Why: Publish-time dating belongs to persistence metadata, not the authored YAML payload.
+    Fails when: Explicit effective windows are ignored or written into the canonical payload.
+    """
+    row = HierarchyVersionSerializer().serialize_version(
+        build_definition(),
+        status="published",
+        published_at="2026-04-26T12:00:00Z",
+        effective_start_date="2026-05-01",
+        effective_end_date="2026-12-31",
+    )
+
+    payload = json.loads(row.payload_json)
+    assert row.effective_start_date == "2026-05-01"
+    assert row.effective_end_date == "2026-12-31"
+    assert "effective_start_date" not in payload
+    assert "effective_end_date" not in payload
 

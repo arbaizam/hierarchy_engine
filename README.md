@@ -100,7 +100,9 @@ Notes:
 
 - The loader rejects the legacy top-level `hierarchy:` wrapper.
 - YAML does not carry `draft`, `published`, or `retired`.
+- YAML does not carry `effective_start_date` or `effective_end_date`.
 - Publish writes `status = 'published'`.
+- Publish writes effective dates as persistence metadata.
 - Retirement is an explicit persistence operation.
 
 ## Persistence Model
@@ -115,6 +117,8 @@ Expected columns:
 - `hierarchy_name`
 - `version`
 - `status`
+- `effective_start_date`
+- `effective_end_date`
 - `description`
 - `payload_json`
 - `content_hash`
@@ -134,6 +138,9 @@ Design intent:
 - `content_hash` is a deterministic SHA-256 hash of canonical payload bytes.
 - `node_count`, `leaf_count`, and `max_depth` are convenience summary metrics.
 - `status` is currently `published` or `retired`.
+- `effective_start_date` and `effective_end_date` are non-null persistence fields.
+- By default, publish sets `effective_start_date` to the publish date and `effective_end_date` to `2999-12-31`.
+- Retirement closes the effective window by setting `effective_end_date` to the retirement date unless an explicit effective end date is supplied.
 
 ### Derived Node Table
 
@@ -176,6 +183,8 @@ The engine now follows a simplified lifecycle:
 - `retired`: no longer active for published consumers
 
 There is no authored `draft` state in YAML. If a hierarchy is still being edited, that state exists only in source control or the working file before publish.
+
+Effective dating is part of persisted lifecycle metadata, not the YAML authoring contract. Published rows are open-ended with `effective_end_date = '2999-12-31'` by default. Retiring a version updates both lifecycle status and the effective end date.
 
 Recommended operating rules:
 
@@ -405,6 +414,20 @@ service.publish_to_tables(
 )
 ```
 
+To override the default publish effective window, pass `effective_start_date` and/or `effective_end_date`:
+
+```python
+service.publish_to_tables(
+    definition=definition,
+    spark=spark,
+    version_table="catalog.schema.hierarchy_versions",
+    node_table="catalog.schema.base_hierarchy_node",
+    published_by="your.user",
+    effective_start_date="2026-04-01",
+    effective_end_date="2999-12-31",
+)
+```
+
 `publish_to_tables(...)` performs:
 
 1. strict pre-structural validation
@@ -412,7 +435,7 @@ service.publish_to_tables(
 3. strict post-structural validation on those exact rows
 4. strict pre-publish validation against persisted state
 5. derived node-row write
-6. authoritative version-row write
+6. authoritative version-row write with `status = 'published'`, non-null `effective_start_date`, and non-null `effective_end_date`
 
 ### Recover from a Partial Publish
 
@@ -482,6 +505,19 @@ service.retire_version(
     hierarchy_id="MVE_DOE",
     version="2026Q1",
     retired_by="your.user",
+)
+```
+
+By default, retirement sets `retired_at` to the current UTC timestamp and sets `effective_end_date` to that timestamp's date. To close the effective window on a different business date, pass `effective_end_date` explicitly:
+
+```python
+service.retire_version(
+    spark=spark,
+    version_table="catalog.schema.hierarchy_versions",
+    hierarchy_id="MVE_DOE",
+    version="2026Q1",
+    retired_by="your.user",
+    effective_end_date="2026-06-30",
 )
 ```
 
