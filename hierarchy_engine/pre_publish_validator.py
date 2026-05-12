@@ -41,11 +41,6 @@ class PrePublishHierarchyValidator:
             version_table=version_table,
             result=result,
         )
-        self._validate_no_existing_published_sibling(
-            metadata=metadata,
-            version_table=version_table,
-            result=result,
-        )
         self._validate_node_rows_do_not_exist(
             metadata=metadata,
             node_table=node_table,
@@ -106,37 +101,6 @@ class PrePublishHierarchyValidator:
                     "hierarchy_id": metadata.hierarchy_id,
                     "version": metadata.version,
                     "row_count": existing_count,
-                },
-            )
-
-    def _validate_no_existing_published_sibling(
-        self,
-        metadata: HierarchyMetadata,
-        version_table: str,
-        result: ValidationResult,
-    ) -> None:
-        if not self._table_exists(version_table):
-            return
-
-        current_count = self.spark.sql(
-            f"""
-            SELECT COUNT(*) AS published_count
-            FROM {version_table}
-            WHERE hierarchy_id = {self._sql_string_literal(metadata.hierarchy_id)}
-              AND status = 'published'
-            """
-        ).first()["published_count"]
-
-        if current_count > 0:
-            result.add_issue(
-                severity="ERROR",
-                check_name="published_version_conflict",
-                message=(
-                    f"Hierarchy '{metadata.hierarchy_id}' already has a published version"
-                ),
-                details={
-                    "hierarchy_id": metadata.hierarchy_id,
-                    "published_count": current_count,
                 },
             )
 

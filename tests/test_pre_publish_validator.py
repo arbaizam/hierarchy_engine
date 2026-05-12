@@ -48,7 +48,7 @@ class FakeSpark:
 
 def test_pre_publish_validator_accepts_clean_persistence_state():
     """
-    What: Accepts a persistence state with no existing version, no published conflict, and no derived node rows.
+    What: Accepts a persistence state with no existing target version and no derived node rows.
     Why: Clean first-time publishes should not be blocked by the pre-write gate.
     Fails when: Empty version/node tables still produce persistence conflicts.
     """
@@ -57,7 +57,6 @@ def test_pre_publish_validator_accepts_clean_persistence_state():
         existing_tables={"version", "nodes"},
         sql_results={
             "SELECT COUNT(*) AS row_count FROM version": [FakeRow(row_count=0)],
-            "SELECT COUNT(*) AS published_count": [FakeRow(published_count=0)],
             "SELECT account_key, COUNT(*) AS row_count": [],
             "SELECT COUNT(*) AS row_count FROM nodes": [FakeRow(row_count=0)],
         },
@@ -83,7 +82,6 @@ def test_pre_publish_validator_reports_existing_version_and_node_rows():
         existing_tables={"version", "nodes"},
         sql_results={
             "SELECT COUNT(*) AS row_count FROM version": [FakeRow(row_count=2)],
-            "SELECT COUNT(*) AS published_count": [FakeRow(published_count=0)],
             "SELECT account_key, COUNT(*) AS row_count": [
                 FakeRow(account_key="10000", row_count=2)
             ],
@@ -104,18 +102,17 @@ def test_pre_publish_validator_reports_existing_version_and_node_rows():
     assert "duplicate_persisted_node_rows" in check_names
 
 
-def test_pre_publish_validator_reports_published_name_conflict():
+def test_pre_publish_validator_allows_existing_published_sibling():
     """
-    What: Reports a published-version conflict when the same hierarchy identifier already has a published row.
-    Why: Only one published version per hierarchy should be visible to reporting consumers at a time.
-    Fails when: Existing published siblings keyed by `hierarchy_id` no longer block a new publish.
+    What: Allows another published version for the same hierarchy identifier when the target version is new.
+    Why: Effective dates and version identity carry publication semantics, so multiple published versions may coexist.
+    Fails when: Existing published siblings block a valid new version publish.
     """
     metadata = build_definition().metadata
     spark = FakeSpark(
         existing_tables={"version", "nodes"},
         sql_results={
             "SELECT COUNT(*) AS row_count FROM version": [FakeRow(row_count=0)],
-            "SELECT COUNT(*) AS published_count": [FakeRow(published_count=1)],
             "SELECT account_key, COUNT(*) AS row_count": [],
             "SELECT COUNT(*) AS row_count FROM nodes": [FakeRow(row_count=0)],
         },
@@ -127,8 +124,7 @@ def test_pre_publish_validator_reports_published_name_conflict():
         node_table="nodes",
     )
 
-    check_names = {issue.check_name for issue in result.issues}
-    assert "published_version_conflict" in check_names
+    assert result.passed is True
 
 
 def test_pre_publish_validator_rejects_invalid_table_identifier():

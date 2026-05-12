@@ -138,8 +138,8 @@ class HierarchyRepository:
                 StructField("max_depth", IntegerType(), False),
                 StructField("owner", StringType(), True),
                 StructField("owner_department", StringType(), True),
-                StructField("published_by", StringType(), True),
-                StructField("published_at", StringType(), True),
+                StructField("published_by", StringType(), False),
+                StructField("published_at", StringType(), False),
                 StructField("retired_by", StringType(), True),
                 StructField("retired_at", StringType(), True),
             ]
@@ -159,8 +159,8 @@ class HierarchyRepository:
                 StructField("parent_account_key", StringType(), True),
                 StructField("account_level", IntegerType(), False),
                 StructField("node_path", StringType(), False),
-                StructField("created_at", StringType(), True),
-                StructField("updated_at", StringType(), True),
+                StructField("created_at", StringType(), False),
+                StructField("updated_at", StringType(), False),
             ]
         )
 
@@ -187,12 +187,85 @@ class HierarchyRepository:
         )
         validate_sql_identifier(version_table, kind="table")
         validate_sql_identifier(node_table, kind="table")
-        self.spark.createDataFrame([], schema=self.version_schema).write.mode(
-            mode
-        ).saveAsTable(version_table)
-        self.spark.createDataFrame([], schema=self.node_schema).write.mode(
-            mode
-        ).saveAsTable(node_table)
+        normalized_mode = mode.lower()
+        if normalized_mode not in {"errorifexists", "ignore", "overwrite"}:
+            raise HierarchyValidationError(
+                "Base table creation mode must be one of: errorifexists, ignore, overwrite"
+            )
+
+        self._create_delta_table(
+            table_name=version_table,
+            ddl_columns=self._version_ddl_columns(),
+            mode=normalized_mode,
+        )
+        self._create_delta_table(
+            table_name=node_table,
+            ddl_columns=self._node_ddl_columns(),
+            mode=normalized_mode,
+        )
+
+    def _create_delta_table(
+        self,
+        *,
+        table_name: str,
+        ddl_columns: list[str],
+        mode: str,
+    ) -> None:
+        """
+        Create a Delta table with explicit SQL DDL.
+
+        Spark DataFrame writes can drop nullability metadata on empty table
+        creation, so table bootstrap uses DDL while row writes continue to use
+        DataFrames.
+        """
+        exists_clause = "IF NOT EXISTS " if mode == "ignore" else ""
+        if mode == "overwrite":
+            self.spark.sql(f"DROP TABLE IF EXISTS {table_name}")
+
+        column_sql = ",\n                ".join(ddl_columns)
+        self.spark.sql(
+            f"""
+            CREATE TABLE {exists_clause}{table_name} (
+                {column_sql}
+            )
+            USING DELTA
+            """
+        )
+
+    def _version_ddl_columns(self) -> list[str]:
+        return [
+            "hierarchy_id STRING NOT NULL",
+            "hierarchy_name STRING NOT NULL",
+            "version STRING NOT NULL",
+            "status STRING NOT NULL",
+            "effective_start_date STRING NOT NULL",
+            "effective_end_date STRING NOT NULL",
+            "description STRING",
+            "payload_json STRING NOT NULL",
+            "content_hash STRING NOT NULL",
+            "node_count INT NOT NULL",
+            "leaf_count INT NOT NULL",
+            "max_depth INT NOT NULL",
+            "owner STRING",
+            "owner_department STRING",
+            "published_by STRING NOT NULL",
+            "published_at STRING NOT NULL",
+            "retired_by STRING",
+            "retired_at STRING",
+        ]
+
+    def _node_ddl_columns(self) -> list[str]:
+        return [
+            "hierarchy_id STRING NOT NULL",
+            "version STRING NOT NULL",
+            "account_key STRING NOT NULL",
+            "account_name STRING NOT NULL",
+            "parent_account_key STRING",
+            "account_level INT NOT NULL",
+            "node_path STRING NOT NULL",
+            "created_at STRING NOT NULL",
+            "updated_at STRING NOT NULL",
+        ]
 
     def write_version(
         self,

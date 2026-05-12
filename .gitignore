@@ -9,3 +9,6 @@ htmlcov/
 
 pytest-cache-files-*/
 tmp*/
+outputs/
+~$*
+*.xlsx

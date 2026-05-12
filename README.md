@@ -140,6 +140,7 @@ Design intent:
 - `status` is currently `published` or `retired`.
 - `effective_start_date` and `effective_end_date` are non-null persistence fields.
 - By default, publish sets `effective_start_date` to the publish date and `effective_end_date` to `2999-12-31`.
+- `published_by` and `published_at` are non-null for persisted version rows; missing publish actors default to `system`.
 - Retirement closes the effective window by setting `effective_end_date` to the retirement date unless an explicit effective end date is supplied.
 
 ### Derived Node Table
@@ -161,6 +162,11 @@ Expected columns:
 - `node_path`
 - `created_at`
 - `updated_at`
+
+Notes:
+
+- `parent_account_key` is nullable because root nodes do not have parents.
+- `created_at` and `updated_at` are non-null row audit timestamps populated during flattening/publish.
 
 ### Reporting Views
 
@@ -191,7 +197,7 @@ Recommended operating rules:
 - do not edit published rows in place
 - do not reuse an existing `(hierarchy_id, version)`
 - retire a published version explicitly when replacing it
-- treat one published version per hierarchy as the normal operating model
+- use `version`, `status`, and effective dates to distinguish coexisting published versions
 - do not run concurrent publish operations for the same `hierarchy_id`
 
 ## Validation Strategy
@@ -266,7 +272,6 @@ Current checks:
 
 - duplicate persisted version rows for `(hierarchy_id, version)`
 - existing persisted version row for `(hierarchy_id, version)`
-- existing published sibling for the same `hierarchy_id`
 - existing node rows for `(hierarchy_id, version)`
 - duplicate persisted node rows by `account_key`
 
@@ -282,7 +287,6 @@ Current checks:
 
 - duplicate persisted node rows
 - missing persisted parents
-- multiple published versions for the same `hierarchy_id`
 
 Use this for diagnostics, reconciliation, and monitoring. Do not treat it as the main publish gate.
 

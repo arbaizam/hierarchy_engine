@@ -87,9 +87,9 @@ def test_rows_to_dataframe_passes_rows_to_spark():
 
 def test_create_base_tables_creates_empty_tables_from_explicit_schemas():
     """
-    What: Creates empty version and node tables from the repository's explicit schemas.
-    Why: Bootstrapping a new environment should not depend on pre-existing DDL outside the library.
-    Fails when: Base-table creation uses the wrong schemas, write mode, or table targets.
+    What: Creates empty version and node tables using explicit Delta DDL.
+    Why: Bootstrapping a new environment should preserve NOT NULL table metadata instead of relying on empty DataFrame writes.
+    Fails when: Base-table creation loses DDL ownership, nullability metadata, or table targets.
     """
     spark = FakeSpark()
 
@@ -99,15 +99,56 @@ def test_create_base_tables_creates_empty_tables_from_explicit_schemas():
         mode="overwrite",
     )
 
-    assert len(spark.created_frames) == 2
-    assert spark.created_frames[0].data == []
-    assert spark.created_frames[0].write.mode_value == "overwrite"
-    assert spark.created_frames[0].write.table_name == "version_table"
-    assert spark.created_frames[1].write.table_name == "node_table"
-    assert spark.created_frames[0].schema[2].name == "version"
-    assert spark.created_frames[0].schema[4].name == "effective_start_date"
-    assert spark.created_frames[0].schema[5].name == "effective_end_date"
-    assert spark.created_frames[1].schema[2].name == "account_key"
+    assert len(spark.created_frames) == 0
+    assert any("DROP TABLE IF EXISTS version_table" in query for query in spark.queries)
+    assert any("DROP TABLE IF EXISTS node_table" in query for query in spark.queries)
+    assert any("CREATE TABLE version_table" in query for query in spark.queries)
+    assert any("CREATE TABLE node_table" in query for query in spark.queries)
+    assert any("effective_start_date STRING NOT NULL" in query for query in spark.queries)
+    assert any("effective_end_date STRING NOT NULL" in query for query in spark.queries)
+    assert any("published_by STRING NOT NULL" in query for query in spark.queries)
+    assert any("published_at STRING NOT NULL" in query for query in spark.queries)
+    assert any("account_key STRING NOT NULL" in query for query in spark.queries)
+    assert any("created_at STRING NOT NULL" in query for query in spark.queries)
+    assert any("updated_at STRING NOT NULL" in query for query in spark.queries)
+    assert all("USING DELTA" in query for query in spark.queries if "CREATE TABLE" in query)
+
+
+def test_create_base_tables_uses_if_not_exists_for_ignore_mode():
+    """
+    What: Uses CREATE TABLE IF NOT EXISTS for idempotent environment bootstrap.
+    Why: Deployment notebooks should be safely rerunnable without dropping existing hierarchy data.
+    Fails when: Ignore mode emits destructive DDL or non-idempotent CREATE TABLE statements.
+    """
+    spark = FakeSpark()
+
+    HierarchyRepository(spark).create_base_tables(
+        version_table="version_table",
+        node_table="node_table",
+        mode="ignore",
+    )
+
+    assert not any("DROP TABLE" in query for query in spark.queries)
+    assert any("CREATE TABLE IF NOT EXISTS version_table" in query for query in spark.queries)
+    assert any("CREATE TABLE IF NOT EXISTS node_table" in query for query in spark.queries)
+
+
+def test_create_base_tables_rejects_unknown_mode():
+    """
+    What: Rejects unsupported table creation modes before emitting DDL.
+    Why: Silent interpretation of unknown modes could accidentally create or replace deployment tables incorrectly.
+    Fails when: Invalid modes are accepted or produce Spark SQL side effects.
+    """
+    spark = FakeSpark()
+
+    with pytest.raises(HierarchyValidationError, match="mode must be one of"):
+        HierarchyRepository(spark).create_base_tables(
+            version_table="version_table",
+            node_table="node_table",
+            mode="append",
+        )
+
+    assert spark.queries == []
 
 
 def test_write_version_creates_append_table_payload():
@@ -195,7 +236,7 @@ def test_version_exists_queries_row_count():
 def test_published_version_exists_queries_row_count():
     """
     What: Detects whether a hierarchy already has a published version row.
-    Why: The service enforces one published version per hierarchy identifier at publish time.
+    Why: Some callers may need to inspect published-version presence without blocking valid additional versions.
     Fails when: Published sibling detection stops honoring persisted row counts.
     """
     spark = FakeSpark(

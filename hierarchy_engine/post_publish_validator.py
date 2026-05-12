@@ -54,12 +54,6 @@ class PostPublishHierarchyValidator:
             node_table=node_table,
             result=result,
         )
-        self._validate_multiple_published_versions(
-            hierarchy_id=hierarchy_id,
-            version_table=version_table,
-            result=result,
-        )
- 
         return result.finalize()
  
     # ---------------------------------------------------------------------
@@ -194,47 +188,6 @@ class PostPublishHierarchyValidator:
                     "account_key": row["account_key"],
                     "account_name": row["account_name"],
                     "parent_account_key": row["parent_account_key"],
-                },
-            )
- 
-    # ---------------------------------------------------------------------
-    # Multiple published versions check
-    # ---------------------------------------------------------------------
- 
-    def _validate_multiple_published_versions(
-        self,
-        hierarchy_id: str,
-        version_table: str,
-        result: ValidationResult,
-    ) -> None:
-        """
-        Detect multiple published versions for the same hierarchy id.
-
-        Most environments should allow at most one `status = published`
-        version for a given hierarchy_id at a time. If multiple published rows
-        exist, downstream consumers may not know which version to treat as the
-        active release.
-        """
-        current_df = self.spark.sql(f"""
-            SELECT
-                COUNT(*) AS current_count
-            FROM {version_table}
-            WHERE hierarchy_id = {self._sql_string_literal(hierarchy_id)}
-              AND status = 'published'
-        """)
- 
-        current_count = current_df.first()["current_count"]
- 
-        if current_count > 1:
-            result.add_issue(
-                severity="ERROR",
-                check_name="multiple_published_versions",
-                message=(
-                    f"Hierarchy '{hierarchy_id}' has more than one published version"
-                ),
-                details={
-                    "hierarchy_id": hierarchy_id,
-                    "current_count": current_count,
                 },
             )
  

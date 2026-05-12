@@ -38,15 +38,14 @@ class FakeSpark:
 
 def test_post_publish_validator_accepts_clean_persisted_state():
     """
-    What: Accepts a published persistence state with unique node rows, valid parents, and one published version.
+    What: Accepts a published persistence state with unique node rows and valid parents.
     Why: Post-publish audit should confirm a healthy write without inventing drift where none exists.
-    Fails when: Clean persisted versions start producing duplicate, parent, or lifecycle audit issues.
+    Fails when: Clean persisted versions start producing duplicate or parent audit issues.
     """
     spark = FakeSpark(
         {
             "SELECT account_key, COUNT(*) AS row_count": [],
             "SELECT child.account_key,": [],
-            "SELECT COUNT(*) AS current_count": [FakeRow(current_count=1)],
         }
     )
 
@@ -62,8 +61,8 @@ def test_post_publish_validator_accepts_clean_persisted_state():
 
 def test_post_publish_validator_reports_all_supported_issue_types():
     """
-    What: Reports duplicate node rows, missing parents, and multiple published versions in one audit pass.
-    Why: The persisted-state validator should surface every supported structural and lifecycle defect together.
+    What: Reports duplicate node rows and missing parents in one audit pass.
+    Why: The persisted-state validator should surface every supported structural defect together.
     Fails when: Any supported post-publish issue type stops being detected or is masked by earlier checks.
     """
     spark = FakeSpark(
@@ -78,7 +77,6 @@ def test_post_publish_validator_reports_all_supported_issue_types():
                     parent_account_key="99999",
                 )
             ],
-            "SELECT COUNT(*) AS current_count": [FakeRow(current_count=2)],
         }
     )
 
@@ -92,7 +90,6 @@ def test_post_publish_validator_reports_all_supported_issue_types():
     check_names = {issue.check_name for issue in result.issues}
     assert "duplicate_persisted_node_rows" in check_names
     assert "missing_persisted_parent" in check_names
-    assert "multiple_published_versions" in check_names
 
 
 def test_post_publish_validator_rejects_invalid_table_identifier():
